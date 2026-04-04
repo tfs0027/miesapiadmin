@@ -471,7 +471,14 @@ function savePengaturanAdmin(){
   var wa = (g("cfg-admin-wa")||{value:""}).value.trim().replace(/[^0-9]/g,"");
   _adminCFG.adminWA = wa;
   saveAdminCFG();
-  showNotif("✅ Pengaturan disimpan","#00B894");
+  // Save admin WA to Supabase system_config so register page can read it
+  if (_sb && wa) {
+    _sb.from('system_config').upsert({key:'admin_wa', value:wa},{onConflict:'key'})
+      .then(function(){ showNotif("✅ Pengaturan disimpan & tersync","#00B894"); })
+      .catch(function(){ showNotif("✅ Tersimpan lokal (sync Supabase gagal)","#F59E0B"); });
+  } else {
+    showNotif("✅ Pengaturan disimpan","#00B894");
+  }
   updatePreviewLink();
 }
 function updatePreviewLink(){
