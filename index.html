@@ -391,7 +391,7 @@ textarea.fi{resize:vertical;min-height:70px}
 
 const SB_URL = 'https://lztdvlrunspmcoewfjcg.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6dGR2bHJ1bnNwbWNvZXdmamNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2ODA5MDIsImV4cCI6MjA5MDI1NjkwMn0.fOxpyctLY6k-QjaMIdUdRHJnsGm7FhPozhWTMBSl9-4';
-const ADMIN_PASS = 'warungku2025admin';
+const ADMIN_PASS_HASH = '70207515bb6e6993f7ffa43c9a42eb9edef53178ff9a15e928fe5e5eac0dd726'; // SHA-256 hash, bukan password asli
 const FITUR_LIST = [
   {key:'kasir', label:'🛒 Kasir & Order'},
   {key:'meja', label:'🪑 Manajemen Meja'},
@@ -446,16 +446,30 @@ function kirimLinkWA(tokoId, tokoHp) {
   window.open('https://wa.me/' + hp + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
-function doAdminLogin(){
+async function doAdminLogin(){
   loadAdminCFG();
-  var pass=g('admin-pass').value;
-  if(pass!==(_adminCFG.adminPass||ADMIN_PASS)){g('login-err').textContent='Password salah';g('login-err').style.display='block';return;}
-  _sb=window.supabase.createClient(SB_URL,SB_KEY);
-  g('login-screen').style.display='none';g('app').style.display='flex';
+  var pass = g('admin-pass').value;
+  if (!pass) { g('login-err').textContent='Masukkan password'; g('login-err').style.display='block'; return; }
+  var inputHash = await hashPassword(pass);
+  var storedHash = _adminCFG.adminPassHash || ADMIN_PASS_HASH;
+  if (inputHash !== storedHash) {
+    g('login-err').textContent = 'Password salah';
+    g('login-err').style.display = 'block';
+    g('admin-pass').value = '';
+    return;
+  }
+  _sb = window.supabase.createClient(SB_URL, SB_KEY);
+  g('login-screen').style.display='none'; g('app').style.display='flex';
   loadAll();
 }
 function doLogout(){g('login-screen').style.display='flex';g('app').style.display='none';g('admin-pass').value='';}
 var _adminCFG = {};
+
+async function hashPassword(pass) {
+  var enc = new TextEncoder().encode(pass);
+  var buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+}
 function loadAdminCFG(){
   try{ _adminCFG=JSON.parse(localStorage.getItem("wkadmin_cfg")||"{}"); }catch(e){ _adminCFG={}; }
   POS_BASE_URL = _adminCFG.posBaseUrl || POS_BASE_URL;
@@ -485,15 +499,20 @@ function updatePreviewLink(){
   var el = g("preview-pos-link"); if(!el) return;
   el.textContent = (POS_BASE_URL||"-") + "?r=RESTAURANT_ID";
 }
-function ubahPassword(){
+async function ubahPassword(){
   var lama=(g("cfg-pass-lama")||{value:""}).value;
   var baru=(g("cfg-pass-baru")||{value:""}).value;
   var konfirm=(g("cfg-pass-konfirm")||{value:""}).value;
-  if(lama !== (_adminCFG.adminPass||ADMIN_PASS)){ showNotif("Password lama salah","#EF4444"); return; }
+  // Check old password with hash
+  var lamaHash = await hashPassword(lama);
+  var storedHash2 = _adminCFG.adminPassHash || ADMIN_PASS_HASH;
+  if (lamaHash !== storedHash2) { showNotif('Password lama salah','#EF4444'); return; }
   if(!baru||baru.length<6){ showNotif("Password baru minimal 6 karakter","#EF4444"); return; }
   if(baru!==konfirm){ showNotif("Konfirmasi tidak cocok","#EF4444"); return; }
-  _adminCFG.adminPass = baru;
-  saveAdminCFG();
+  hashPassword(baru).then(function(h){
+    _adminCFG.adminPassHash = h;
+    saveAdminCFG();
+  });
   showNotif("✅ Password berhasil diubah","#00B894");
   ["cfg-pass-lama","cfg-pass-baru","cfg-pass-konfirm"].forEach(function(id){ var el=g(id);if(el)el.value=""; });
 }
