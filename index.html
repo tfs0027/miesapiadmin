@@ -340,9 +340,10 @@ textarea.fi{resize:vertical;min-height:70px}
 </div>
 
 <script>
-const SB_URL =  + SB_URL + ;
-const SB_KEY =  + SB_KEY + ;
-const ADMIN_PASS = 'warungku2025admin'; // Ganti dengan password kuat
+
+const SB_URL = 'https://lztdvlrunspmcoewfjcg.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6dGR2bHJ1bnNwbWNvZXdmamNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2ODA5MDIsImV4cCI6MjA5MDI1NjkwMn0.fOxpyctLY6k-QjaMIdUdRHJnsGm7FhPozhWTMBSl9-4';
+const ADMIN_PASS = 'warungku2025admin';
 const FITUR_LIST = [
   {key:'kasir', label:'🛒 Kasir & Order'},
   {key:'meja', label:'🪑 Manajemen Meja'},
@@ -356,461 +357,292 @@ const FITUR_LIST = [
   {key:'rekrutmen', label:'📝 Rekrutmen'},
   {key:'multi_user', label:'👤 Multi User/Kasir'},
 ];
-
-var _sb = null, _plans = [], _tokoData = [], _subData = [], _tokoFilter = 'all';
-
-function g(id){ return document.getElementById(id); }
-
-function showNotif(msg, color){
-  var t = g('toast'); t.textContent = msg;
-  t.style.background = color||'#1E1B2E';
-  t.classList.add('show');
-  setTimeout(function(){ t.classList.remove('show'); }, 2800);
+var _sb=null,_plans=[],_tokoData=[],_subData=[],_tokoFilter='all';
+function g(id){return document.getElementById(id);}
+function showNotif(msg,color){
+  var t=g('toast');t.textContent=msg;t.style.background=color||'#1E1B2E';
+  t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
 }
-
-// ── AUTH ──
-function doAdminLogin() {
-  var pass = g('admin-pass').value;
-  if (pass !== ADMIN_PASS) {
-    g('login-err').textContent = 'Password salah';
-    g('login-err').style.display = 'block';
-    return;
-  }
-  _sb = window.supabase.createClient(SB_URL, SB_KEY);
-  g('login-screen').style.display = 'none';
-  g('app').style.display = 'flex';
+function doAdminLogin(){
+  var pass=g('admin-pass').value;
+  if(pass!==ADMIN_PASS){g('login-err').textContent='Password salah';g('login-err').style.display='block';return;}
+  _sb=window.supabase.createClient(SB_URL,SB_KEY);
+  g('login-screen').style.display='none';g('app').style.display='flex';
   loadAll();
 }
-
-function doLogout() {
-  g('login-screen').style.display = 'flex';
-  g('app').style.display = 'none';
-  g('admin-pass').value = '';
+function doLogout(){g('login-screen').style.display='flex';g('app').style.display='none';g('admin-pass').value='';}
+function nav(p){
+  document.querySelectorAll('.sb-item').forEach(function(el){el.classList.toggle('active',el.dataset.p===p);});
+  document.querySelectorAll('.page').forEach(function(el){el.classList.remove('active');});
+  var pg=g('page-'+p);if(pg)pg.classList.add('active');
+  if(p==='toko')renderTokoTable();
+  if(p==='langganan')renderSubTable();
+  if(p==='paket')renderPaketCards();
+  if(p==='dashboard')renderDashboard();
 }
-
-// ── NAV ──
-function nav(p) {
-  document.querySelectorAll('.sb-item').forEach(function(el){
-    el.classList.toggle('active', el.dataset.p === p);
-  });
-  document.querySelectorAll('.page').forEach(function(el){
-    el.classList.remove('active');
-  });
-  var pg = g('page-'+p); if(pg) pg.classList.add('active');
-  if (p==='toko') renderTokoTable();
-  if (p==='langganan') renderSubTable();
-  if (p==='paket') renderPaketCards();
-  if (p==='dashboard') renderDashboard();
-}
-
-// ── LOAD ALL ──
-async function loadAll() {
-  try {
-    var [rPlan, rResto, rSub] = await Promise.all([
-      _sb.from('plans').select('*').order('urutan'),
-      _sb.from('restaurants').select('*').order('created_at', {ascending:false}),
-      _sb.from('subscriptions').select('*,plans(nama,harga)').order('created_at', {ascending:false})
-    ]);
-    _plans = rPlan.data || [];
-    _tokoData = rResto.data || [];
-    _subData = rSub.data || [];
-    renderDashboard();
-    renderTokoTable();
-    renderSubTable();
-    renderPaketCards();
-    // Update plan dropdowns
-    var opts = '<option value="">-- Pilih Paket --</option>' + _plans.map(function(p){
+async function loadAll(){
+  try{
+    var r1=await _sb.from('plans').select('*').order('urutan');
+    var r2=await _sb.from('restaurants').select('*').order('created_at',{ascending:false});
+    var r3=await _sb.from('subscriptions').select('*,plans(nama,harga)').order('created_at',{ascending:false});
+    _plans=r1.data||[];_tokoData=r2.data||[];_subData=r3.data||[];
+    renderDashboard();renderTokoTable();renderSubTable();renderPaketCards();
+    var opts='<option value="">-- Pilih Paket --</option>'+_plans.map(function(p){
       return '<option value="'+p.id+'">'+p.nama+' (Rp '+p.harga.toLocaleString('id-ID')+'/'+p.periode+')</option>';
     }).join('');
-    ['t-plan','sub-plan'].forEach(function(id){ var el=g(id); if(el) el.innerHTML=opts; });
-    // Badge pending
-    var pending = _tokoData.filter(function(t){ return t.status==='pending'; });
-    var badge = g('badge-pending');
-    if (badge) { badge.textContent = pending.length; badge.style.display = pending.length>0?'inline':'none'; }
-  } catch(e) { showNotif('Gagal load: '+e.message, '#EF4444'); }
+    ['t-plan','sub-plan'].forEach(function(id){var el=g(id);if(el)el.innerHTML=opts;});
+    var pending=_tokoData.filter(function(t){return t.status==='pending';});
+    var badge=g('badge-pending');
+    if(badge){badge.textContent=pending.length;badge.style.display=pending.length>0?'inline':'none';}
+  }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
-
-// ── DASHBOARD ──
-function renderDashboard() {
-  var now = new Date();
-  var in7 = new Date(now); in7.setDate(in7.getDate()+7);
-  var aktif = _subData.filter(function(s){ return s.status==='active'||s.status==='trial'; });
-  var expired = _subData.filter(function(s){ return s.status==='expired'||(s.selesai&&new Date(s.selesai)<now); });
-  g('m-toko').textContent = _tokoData.length;
-  g('m-aktif').textContent = aktif.length;
-  g('m-expired').textContent = expired.length;
-  // Soon expire
-  var soon = _subData.filter(function(s){
-    if (!s.selesai) return false;
-    var d = new Date(s.selesai);
-    return d >= now && d <= in7 && s.status !== 'expired';
+function renderDashboard(){
+  var now=new Date();var in7=new Date(now);in7.setDate(in7.getDate()+7);
+  var aktif=_subData.filter(function(s){return s.status==='active'||s.status==='trial';});
+  var expired=_subData.filter(function(s){return s.status==='expired'||(s.selesai&&new Date(s.selesai)<now);});
+  g('m-toko').textContent=_tokoData.length;
+  g('m-aktif').textContent=aktif.length;
+  g('m-expired').textContent=expired.length;
+  var soon=_subData.filter(function(s){
+    if(!s.selesai)return false;var d=new Date(s.selesai);return d>=now&&d<=in7&&s.status!=='expired';
   });
-  g('dash-soon-expire').innerHTML = soon.length ? soon.map(function(s){
-    var toko = _tokoData.find(function(t){ return t.id===s.restaurant_id; });
-    var sisa = Math.ceil((new Date(s.selesai)-now)/86400000);
-    return '<div style="padding:6px 0;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between">' +
-      '<span>🏪 '+(toko?toko.nama:'-')+'</span>' +
+  g('dash-soon-expire').innerHTML=soon.length?soon.map(function(s){
+    var toko=_tokoData.find(function(t){return t.id===s.restaurant_id;});
+    var sisa=Math.ceil((new Date(s.selesai)-now)/86400000);
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between">'+
+      '<span>🏪 '+(toko?toko.nama:'-')+'</span>'+
       '<span style="color:var(--amber-dk);font-weight:700">'+sisa+' hari lagi</span></div>';
-  }).join('') : '<div style="padding:12px 0;color:var(--txt3)">Tidak ada yang akan expired</div>';
-  // New toko
-  var newToko = _tokoData.slice(0,5);
-  g('dash-new-toko').innerHTML = newToko.length ? newToko.map(function(t){
-    var tgl = t.created_at ? new Date(t.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short'}) : '-';
-    return '<div style="padding:6px 0;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between">' +
+  }).join(''):'<div style="padding:12px 0;color:var(--txt3)">Tidak ada yang akan expired</div>';
+  var newToko=_tokoData.slice(0,5);
+  g('dash-new-toko').innerHTML=newToko.length?newToko.map(function(t){
+    var tgl=t.created_at?new Date(t.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short'}):'';
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between">'+
       '<span>🏪 '+t.nama+'</span><span style="color:var(--txt2);font-size:11px">'+tgl+'</span></div>';
-  }).join('') : '<div style="padding:12px 0;color:var(--txt3)">Belum ada toko</div>';
+  }).join(''):'<div style="padding:12px;color:var(--txt3)">Belum ada toko</div>';
 }
-
-// ── TOKO TABLE ──
-var _tokoSearch = '';
-function filterToko(){ _tokoSearch = (g('toko-search')||{value:''}).value.toLowerCase(); renderTokoTable(); }
-function setTokoFilter(f, btn) {
-  _tokoFilter = f;
-  document.querySelectorAll('[id^="ft-"]').forEach(function(b){ b.classList.remove('active'); });
-  if(btn) btn.classList.add('active');
-  renderTokoTable();
+var _tokoSearch='';
+function filterToko(){_tokoSearch=(g('toko-search')||{value:''}).value.toLowerCase();renderTokoTable();}
+function setTokoFilter(f,btn){
+  _tokoFilter=f;
+  document.querySelectorAll('[id^="ft-"]').forEach(function(b){b.classList.remove('active');});
+  if(btn)btn.classList.add('active');renderTokoTable();
 }
-
-function renderTokoTable() {
-  var now = new Date();
-  var data = _tokoData.filter(function(t){
-    if (_tokoSearch && !(t.nama||'').toLowerCase().includes(_tokoSearch)) return false;
-    var sub = _subData.find(function(s){ return s.restaurant_id===t.id; });
-    var subStatus = sub ? (new Date(sub.selesai)<now && sub.status!=='active' ? 'expired' : sub.status) : 'none';
-    if (_tokoFilter === 'all') return true;
-    return subStatus === _tokoFilter || t.status === _tokoFilter;
+function renderTokoTable(){
+  var now=new Date();
+  var data=_tokoData.filter(function(t){
+    if(_tokoSearch&&!(t.nama||'').toLowerCase().includes(_tokoSearch))return false;
+    var sub=_subData.find(function(s){return s.restaurant_id===t.id;});
+    var ss=sub?(new Date(sub.selesai)<now&&sub.status!=='active'?'expired':sub.status):'none';
+    if(_tokoFilter==='all')return true;
+    return ss===_tokoFilter||t.status===_tokoFilter;
   });
-  var tbody = g('toko-tbody');
-  if (!data.length) { tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--txt3)">Tidak ada toko</td></tr>'; return; }
-  var now2 = new Date();
-  tbody.innerHTML = data.map(function(t) {
-    var sub = _subData.find(function(s){ return s.restaurant_id===t.id; });
-    var planNama = sub&&sub.plans ? sub.plans.nama : '-';
-    var subStatus = sub ? sub.status : 'none';
-    if (sub && sub.selesai && new Date(sub.selesai) < now2) subStatus = 'expired';
-    var selesai = sub&&sub.selesai ? new Date(sub.selesai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
-    var sisa = sub&&sub.selesai ? Math.ceil((new Date(sub.selesai)-now2)/86400000) : 0;
-    var statusBadge = {
-      active:'<span class="badge badge-green">✅ Aktif</span>',
-      trial:'<span class="badge badge-blue">🎯 Trial</span>',
-      expired:'<span class="badge badge-red">⏰ Expired</span>',
-      pending:'<span class="badge badge-amber">⏳ Pending</span>',
-      suspended:'<span class="badge badge-gray">🚫 Suspended</span>',
-      none:'<span class="badge badge-gray">—</span>'
-    }[subStatus] || '<span class="badge badge-gray">'+subStatus+'</span>';
-    return '<tr>' +
-      '<td><div style="font-weight:700">'+(t.logo||'🏪')+' '+t.nama+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.alamat||'-')+'</div></td>' +
-      '<td><div>'+(t.owner_nama||'-')+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.owner_hp||'-')+'</div></td>' +
-      '<td>'+planNama+'</td>' +
-      '<td>'+statusBadge+'</td>' +
-      '<td><div>'+selesai+'</div>'+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari lagi</div>':'')+'</td>' +
-      '<td><div style="display:flex;gap:4px">' +
-        '<button class="btn btn-sm" onclick="editToko(''+t.id+'')">✏️</button>' +
-        '<button class="btn btn-sm btn-primary" onclick="editSub(''+t.id+'')">📋 Sub</button>' +
-        '<button class="btn btn-sm" style="color:var(--red-dk)" onclick="hapusToko(''+t.id+'')">🗑️</button>' +
-      '</div></td>' +
-    '</tr>';
+  var tbody=g('toko-tbody');
+  if(!data.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--txt3)">Tidak ada toko</td></tr>';return;}
+  var now2=new Date();
+  tbody.innerHTML=data.map(function(t){
+    var sub=_subData.find(function(s){return s.restaurant_id===t.id;});
+    var planNama=sub&&sub.plans?sub.plans.nama:'-';
+    var ss=sub?sub.status:'none';
+    if(sub&&sub.selesai&&new Date(sub.selesai)<now2)ss='expired';
+    var selesai=sub&&sub.selesai?new Date(sub.selesai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'';
+    var sisa=sub&&sub.selesai?Math.ceil((new Date(sub.selesai)-now2)/86400000):0;
+    var sb2={active:'<span class="badge badge-green">✅ Aktif</span>',trial:'<span class="badge badge-blue">🎯 Trial</span>',
+      expired:'<span class="badge badge-red">⏰ Expired</span>',pending:'<span class="badge badge-amber">⏳ Pending</span>',
+      suspended:'<span class="badge badge-gray">🚫 Suspend</span>',none:'<span class="badge badge-gray">—</span>'};
+    var tid=t.id;
+    return '<tr>'+
+      '<td><div style="font-weight:700">'+(t.logo||'🏪')+' '+t.nama+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.alamat||'-')+'</div></td>'+
+      '<td><div>'+(t.owner_nama||'-')+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.owner_hp||'-')+'</div></td>'+
+      '<td>'+planNama+'</td>'+(sb2[ss]||ss)+'<td>'+selesai+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari</div>':'')+'</td>'+
+      '<td><div style="display:flex;gap:4px">'+
+        '<button class="btn btn-sm" onclick="editToko(this.dataset.id)" data-id="'+tid+'">✏️</button>'+
+        '<button class="btn btn-sm btn-primary" onclick="editSub(this.dataset.id)" data-id="'+tid+'">📋 Sub</button>'+
+        '<button class="btn btn-sm" style="color:var(--red-dk)" onclick="hapusToko(this.dataset.id)" data-id="'+tid+'">🗑️</button>'+
+      '</div></td></tr>';
   }).join('');
 }
-
-// ── SUBSCRIPTION TABLE ──
-function renderSubTable() {
-  var now = new Date();
-  var tbody = g('sub-tbody');
-  if (!_subData.length) { tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--txt3)">Belum ada langganan</td></tr>'; return; }
-  tbody.innerHTML = _subData.map(function(s) {
-    var toko = _tokoData.find(function(t){ return t.id===s.restaurant_id; });
-    var planNama = s.plans ? s.plans.nama : '-';
-    var status = s.status;
-    if (s.selesai && new Date(s.selesai)<now) status='expired';
-    var statusBadge = {
-      active:'<span class="badge badge-green">✅ Aktif</span>',
-      trial:'<span class="badge badge-blue">🎯 Trial</span>',
-      expired:'<span class="badge badge-red">⏰ Expired</span>',
-      suspended:'<span class="badge badge-gray">🚫 Suspend</span>'
-    }[status] || '<span class="badge badge-gray">'+status+'</span>';
-    var fitur = {};
-    try{ fitur = s.fitur_override ? JSON.parse(typeof s.fitur_override==='string'?s.fitur_override:JSON.stringify(s.fitur_override)) : {}; }catch(e){}
-    var fiturCount = Object.values(fitur).filter(Boolean).length;
-    var mulai = s.mulai ? new Date(s.mulai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'2-digit'}) : '-';
-    var selesai = s.selesai ? new Date(s.selesai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'2-digit'}) : '-';
-    return '<tr>' +
-      '<td><div style="font-weight:700">'+(toko?toko.nama:'-')+'</div></td>' +
-      '<td>'+planNama+'</td>' +
-      '<td>'+mulai+'</td><td>'+selesai+'</td>' +
-      '<td>'+statusBadge+'</td>' +
-      '<td><span style="font-size:11px;color:var(--txt2)">'+fiturCount+' override</span></td>' +
-      '<td><button class="btn btn-sm btn-primary" onclick="editSub(''+s.restaurant_id+'')">✏️ Edit</button></td>' +
-    '</tr>';
+function renderSubTable(){
+  var now=new Date();var tbody=g('sub-tbody');
+  if(!_subData.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--txt3)">Belum ada langganan</td></tr>';return;}
+  tbody.innerHTML=_subData.map(function(s){
+    var toko=_tokoData.find(function(t){return t.id===s.restaurant_id;});
+    var planNama=s.plans?s.plans.nama:'-';var st=s.status;
+    if(s.selesai&&new Date(s.selesai)<now)st='expired';
+    var sb2={active:'<span class="badge badge-green">✅ Aktif</span>',trial:'<span class="badge badge-blue">🎯 Trial</span>',
+      expired:'<span class="badge badge-red">⏰ Expired</span>',suspended:'<span class="badge badge-gray">🚫</span>',pending:'<span class="badge badge-amber">⏳ Pending</span>'};
+    var mulai=s.mulai?new Date(s.mulai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'2-digit'}):'';
+    var selesai=s.selesai?new Date(s.selesai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'2-digit'}):'';
+    var rid=s.restaurant_id;
+    return '<tr><td style="font-weight:700">'+(toko?toko.nama:'-')+'</td><td>'+planNama+'</td><td>'+mulai+'</td><td>'+selesai+'</td>'+
+      '<td>'+(sb2[st]||st)+'</td><td style="font-size:11px;color:var(--txt2)">-</td>'+
+      '<td><button class="btn btn-sm btn-primary" onclick="editSub(this.dataset.id)" data-id="'+rid+'">✏️ Edit</button></td></tr>';
   }).join('');
 }
-
-// ── PAKET CARDS ──
-function renderPaketCards() {
-  var el = g('paket-cards');
-  if (!_plans.length) { el.innerHTML='<div style="color:var(--txt3)">Belum ada paket</div>'; return; }
-  el.innerHTML = _plans.map(function(plan) {
-    var fitur = plan.fitur || {};
-    var fiturOn = FITUR_LIST.filter(function(f){ return fitur[f.key]; });
-    return '<div class="card">' +
-      '<div class="card-hd">' +
-        '<div>' +
-          '<div class="card-title">'+plan.nama+(plan.badge?'<span style="margin-left:6px;background:var(--accent);color:#fff;font-size:9px;padding:2px 8px;border-radius:10px">'+plan.badge+'</span>':'')+'</div>' +
-          '<div style="font-size:13px;font-weight:800;color:var(--accent);margin-top:2px">'+
-            (plan.harga===0?'Gratis':'Rp '+plan.harga.toLocaleString('id-ID'))+
-            '<span style="font-size:11px;color:var(--txt2);font-weight:400">/'+plan.periode+'</span></div>' +
-        '</div>' +
-        '<div style="display:flex;gap:4px">' +
-          '<button class="btn btn-sm" onclick="editPaket(''+plan.id+'')">✏️</button>' +
-          '<button class="btn btn-sm" style="color:var(--red-dk)" onclick="hapusPaket(''+plan.id+'')">🗑️</button>' +
-        '</div>' +
-      '</div>' +
-      '<div style="font-size:11px;color:var(--txt2);margin-bottom:10px">'+plan.deskripsi+'</div>' +
-      '<div>'+fiturOn.map(function(f){ return '<div style="font-size:11px;padding:3px 0">✅ '+f.label+'</div>'; }).join('')+'</div>' +
+function renderPaketCards(){
+  var el=g('paket-cards');
+  if(!_plans.length){el.innerHTML='<div style="color:var(--txt3)">Belum ada paket</div>';return;}
+  el.innerHTML=_plans.map(function(plan){
+    var fitur=plan.fitur||{};
+    var fiturOn=FITUR_LIST.filter(function(f){return fitur[f.key];});
+    var pid=plan.id;
+    return '<div class="card">'+
+      '<div class="card-hd"><div>'+
+        '<div class="card-title">'+plan.nama+(plan.badge?'<span style="margin-left:6px;background:var(--accent);color:#fff;font-size:9px;padding:2px 8px;border-radius:10px">'+plan.badge+'</span>':'')+'</div>'+
+        '<div style="font-size:13px;font-weight:800;color:var(--accent);">'+(plan.harga===0?'Gratis':'Rp '+plan.harga.toLocaleString('id-ID'))+'<span style="font-size:11px;color:var(--txt2)">/'+plan.periode+'</span></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:4px">'+
+        '<button class="btn btn-sm" onclick="editPaket(this.dataset.id)" data-id="'+pid+'">✏️</button>'+
+        '<button class="btn btn-sm" style="color:var(--red-dk)" onclick="hapusPaket(this.dataset.id)" data-id="'+pid+'">🗑️</button>'+
+      '</div></div>'+
+      '<div style="font-size:11px;color:var(--txt2);margin-bottom:10px">'+plan.deskripsi+'</div>'+
+      fiturOn.map(function(f){return '<div style="font-size:11px;padding:2px 0">✅ '+f.label+'</div>';}).join('')+
     '</div>';
   }).join('');
 }
-
-// ── FITUR GRID BUILDER ──
-function buildFiturGrid(containerId, values) {
-  var el = g(containerId); if(!el) return;
-  el.innerHTML = FITUR_LIST.map(function(f) {
-    var on = values && values[f.key];
-    return '<label class="feat-item '+(on?'on':'')+'">'+
-      '<input type="checkbox" '+(on?'checked':'')+' onchange="toggleFeatItem(this)" data-key="'+f.key+'">'+
-      f.label+'</label>';
+function buildFiturGrid(containerId,values){
+  var el=g(containerId);if(!el)return;
+  el.innerHTML=FITUR_LIST.map(function(f){
+    var on=values&&values[f.key];
+    return '<label class="feat-item '+(on?'on':'')+'" onclick="this.classList.toggle(\'on\',this.querySelector(\'input\').checked)">'+
+      '<input type="checkbox" '+(on?'checked':'')+' data-key="'+f.key+'">'+f.label+'</label>';
   }).join('');
-  el.querySelectorAll('.feat-item input').forEach(function(inp){
-    inp.addEventListener('change', function(){
-      inp.closest('.feat-item').classList.toggle('on', inp.checked);
-    });
-  });
 }
-
-function toggleFeatItem(inp){
-  inp.closest('.feat-item').classList.toggle('on', inp.checked);
-}
-
-function getFiturFromGrid(containerId) {
-  var el = g(containerId); if(!el) return {};
-  var result = {};
-  el.querySelectorAll('input[data-key]').forEach(function(inp){
-    result[inp.dataset.key] = inp.checked;
-  });
+function getFiturFromGrid(containerId){
+  var el=g(containerId);if(!el)return{};
+  var result={};
+  el.querySelectorAll('input[data-key]').forEach(function(inp){result[inp.dataset.key]=inp.checked;});
   return result;
 }
-
-// ── TAMBAH/EDIT TOKO ──
-function showTambahToko() {
-  g('modal-toko-title').textContent = '🏪 Tambah Toko';
-  g('toko-edit-id').value = '';
-  ['t-nama','t-logo','t-owner-nama','t-email','t-hp','t-alamat','t-catatan'].forEach(function(id){ var el=g(id); if(el) el.value=''; });
-  g('t-logo').value = '🍜';
-  g('t-status').value = 'trial';
-  var today = new Date().toISOString().substring(0,10);
-  var in14 = new Date(); in14.setDate(in14.getDate()+14);
-  g('t-mulai').value = today;
-  g('t-selesai').value = in14.toISOString().substring(0,10);
-  buildFiturGrid('fitur-override-grid', {});
-  g('modal-toko').classList.add('open');
+function showTambahToko(){
+  g('modal-toko-title').textContent='🏪 Tambah Toko';g('toko-edit-id').value='';
+  ['t-nama','t-logo','t-owner-nama','t-email','t-hp','t-alamat','t-catatan'].forEach(function(id){var el=g(id);if(el)el.value='';});
+  g('t-logo').value='🍜';g('t-status').value='trial';
+  var today=new Date().toISOString().substring(0,10);
+  var in14=new Date();in14.setDate(in14.getDate()+14);
+  g('t-mulai').value=today;g('t-selesai').value=in14.toISOString().substring(0,10);
+  buildFiturGrid('fitur-override-grid',{});g('modal-toko').classList.add('open');
 }
-
-function updateFiturFromPlan() {
-  var planId = g('t-plan').value;
-  var plan = _plans.find(function(p){ return p.id===planId; });
-  if (plan) buildFiturGrid('fitur-override-grid', plan.fitur||{});
+function updateFiturFromPlan(){
+  var planId=g('t-plan').value;var plan=_plans.find(function(p){return p.id===planId;});
+  if(plan)buildFiturGrid('fitur-override-grid',plan.fitur||{});
 }
-
-function editToko(tokoId) {
-  var t = _tokoData.find(function(x){ return x.id===tokoId; });
-  var sub = _subData.find(function(s){ return s.restaurant_id===tokoId; });
-  if (!t) return;
-  g('modal-toko-title').textContent = '✏️ Edit Toko: '+t.nama;
-  g('toko-edit-id').value = tokoId;
-  g('t-nama').value = t.nama||'';
-  g('t-logo').value = t.logo||'🍜';
-  g('t-owner-nama').value = t.owner_nama||'';
-  g('t-email').value = t.owner_email||'';
-  g('t-hp').value = t.owner_hp||'';
-  g('t-alamat').value = t.alamat||'';
-  if (sub) {
-    g('t-plan').value = sub.plan_id||'';
-    g('t-status').value = sub.status||'trial';
-    g('t-mulai').value = sub.mulai||'';
-    g('t-selesai').value = sub.selesai||'';
-    g('t-catatan').value = sub.catatan||'';
-    var fitur = sub.fitur_override;
-    if (typeof fitur === 'string') { try{ fitur=JSON.parse(fitur); }catch(e){ fitur={}; } }
-    buildFiturGrid('fitur-override-grid', fitur||{});
+function editToko(tokoId){
+  var t=_tokoData.find(function(x){return x.id===tokoId;});
+  var sub=_subData.find(function(s){return s.restaurant_id===tokoId;});
+  if(!t)return;
+  g('modal-toko-title').textContent='✏️ Edit: '+t.nama;g('toko-edit-id').value=tokoId;
+  g('t-nama').value=t.nama||'';g('t-logo').value=t.logo||'🍜';
+  g('t-owner-nama').value=t.owner_nama||'';g('t-email').value=t.owner_email||'';
+  g('t-hp').value=t.owner_hp||'';g('t-alamat').value=t.alamat||'';
+  if(sub){
+    g('t-plan').value=sub.plan_id||'';g('t-status').value=sub.status||'trial';
+    g('t-mulai').value=sub.mulai||'';g('t-selesai').value=sub.selesai||'';
+    g('t-catatan').value=sub.catatan||'';
+    var fi=sub.fitur_override;if(typeof fi==='string'){try{fi=JSON.parse(fi);}catch(e){fi={};}}
+    buildFiturGrid('fitur-override-grid',fi||{});
   }
   g('modal-toko').classList.add('open');
 }
-
-async function simpanToko() {
-  var tokoId = g('toko-edit-id').value;
-  var nama = g('t-nama').value.trim();
-  if (!nama) { showNotif('Nama toko wajib diisi','#EF4444'); return; }
-  var tokoData = {
-    nama: nama, logo: g('t-logo').value.trim()||'🍜',
-    owner_nama: g('t-owner-nama').value.trim(),
-    owner_email: g('t-email').value.trim(),
-    owner_hp: g('t-hp').value.trim(),
-    alamat: g('t-alamat').value.trim(),
-    status: 'active'
-  };
-  var planId = g('t-plan').value;
-  var subStatus = g('t-status').value;
-  var mulai = g('t-mulai').value;
-  var selesai = g('t-selesai').value;
-  var catatan = g('t-catatan').value.trim();
-  var fiturOverride = getFiturFromGrid('fitur-override-grid');
-  try {
+async function simpanToko(){
+  var tokoId=g('toko-edit-id').value;var nama=g('t-nama').value.trim();
+  if(!nama){showNotif('Nama toko wajib','#EF4444');return;}
+  var tokoData={nama:nama,logo:g('t-logo').value.trim()||'🍜',owner_nama:g('t-owner-nama').value.trim(),
+    owner_email:g('t-email').value.trim(),owner_hp:g('t-hp').value.trim(),alamat:g('t-alamat').value.trim(),status:'active'};
+  var planId=g('t-plan').value;var subStatus=g('t-status').value;
+  var mulai=g('t-mulai').value;var selesai=g('t-selesai').value;
+  var catatan=g('t-catatan').value.trim();
+  var fiturOverride=getFiturFromGrid('fitur-override-grid');
+  try{
     var rid;
-    if (tokoId) {
-      await _sb.from('restaurants').update(tokoData).eq('id', tokoId);
-      rid = tokoId;
-    } else {
-      var rr = await _sb.from('restaurants').insert(tokoData).select('id').single();
-      if (rr.error) throw rr.error;
-      rid = rr.data.id;
+    if(tokoId){await _sb.from('restaurants').update(tokoData).eq('id',tokoId);rid=tokoId;}
+    else{var rr=await _sb.from('restaurants').insert(tokoData).select('id').single();if(rr.error)throw rr.error;rid=rr.data.id;}
+    if(planId){
+      var subPayload={restaurant_id:rid,plan_id:planId,status:subStatus,mulai:mulai,selesai:selesai,catatan:catatan,fitur_override:fiturOverride};
+      var existSub=_subData.find(function(s){return s.restaurant_id===rid;});
+      if(existSub){await _sb.from('subscriptions').update(subPayload).eq('id',existSub.id);}
+      else{await _sb.from('subscriptions').insert(subPayload);}
     }
-    if (planId) {
-      var subPayload = { restaurant_id:rid, plan_id:planId, status:subStatus, mulai:mulai, selesai:selesai, catatan:catatan, fitur_override:fiturOverride };
-      var existSub = _subData.find(function(s){ return s.restaurant_id===rid; });
-      if (existSub) { await _sb.from('subscriptions').update(subPayload).eq('id', existSub.id); }
-      else { await _sb.from('subscriptions').insert(subPayload); }
-    }
-    g('modal-toko').classList.remove('open');
-    showNotif('✅ Toko berhasil disimpan','#00B894');
-    await loadAll();
-  } catch(e) { showNotif('Gagal: '+e.message,'#EF4444'); }
+    g('modal-toko').classList.remove('open');showNotif('✅ Disimpan','#00B894');await loadAll();
+  }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
-
-function closeTambahToko(){ g('modal-toko').classList.remove('open'); }
-
-async function hapusToko(tokoId) {
-  if (!confirm('Hapus toko ini beserta data langganannya?')) return;
-  try {
-    await _sb.from('subscriptions').delete().eq('restaurant_id', tokoId);
-    await _sb.from('restaurants').delete().eq('id', tokoId);
-    showNotif('✅ Toko dihapus','#00B894');
-    await loadAll();
-  } catch(e) { showNotif('Gagal: '+e.message,'#EF4444'); }
+function closeTambahToko(){g('modal-toko').classList.remove('open');}
+async function hapusToko(tokoId){
+  if(!confirm('Hapus toko ini?'))return;
+  try{await _sb.from('subscriptions').delete().eq('restaurant_id',tokoId);
+    await _sb.from('restaurants').delete().eq('id',tokoId);
+    showNotif('✅ Toko dihapus','#00B894');await loadAll();}catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
-
-// ── EDIT SUBSCRIPTION ──
-function editSub(tokoId) {
-  var toko = _tokoData.find(function(t){ return t.id===tokoId; });
-  var sub = _subData.find(function(s){ return s.restaurant_id===tokoId; });
-  if (!toko) return;
-  g('sub-edit-id').value = tokoId;
-  g('sub-toko-nama').value = toko.nama;
-  if (sub) {
-    g('sub-plan').value = sub.plan_id||'';
-    g('sub-status').value = sub.status||'trial';
-    g('sub-mulai').value = sub.mulai||'';
-    g('sub-selesai').value = sub.selesai||'';
-    g('sub-catatan').value = sub.catatan||'';
-    var fitur = sub.fitur_override;
-    if (typeof fitur==='string'){ try{ fitur=JSON.parse(fitur); }catch(e){ fitur={}; } }
-    buildFiturGrid('sub-fitur-grid', fitur||{});
-  } else {
-    var planId = _plans.length ? _plans[0].id : '';
-    g('sub-plan').value = planId;
-    g('sub-status').value = 'trial';
-    var today = new Date().toISOString().substring(0,10);
-    var in14 = new Date(); in14.setDate(in14.getDate()+14);
-    g('sub-mulai').value = today;
-    g('sub-selesai').value = in14.toISOString().substring(0,10);
-    buildFiturGrid('sub-fitur-grid', {});
+function editSub(tokoId){
+  var toko=_tokoData.find(function(t){return t.id===tokoId;});
+  var sub=_subData.find(function(s){return s.restaurant_id===tokoId;});
+  if(!toko)return;
+  g('sub-edit-id').value=tokoId;g('sub-toko-nama').value=toko.nama;
+  if(sub){
+    g('sub-plan').value=sub.plan_id||'';g('sub-status').value=sub.status||'trial';
+    g('sub-mulai').value=sub.mulai||'';g('sub-selesai').value=sub.selesai||'';
+    g('sub-catatan').value=sub.catatan||'';
+    var fi=sub.fitur_override;if(typeof fi==='string'){try{fi=JSON.parse(fi);}catch(e){fi={};}}
+    buildFiturGrid('sub-fitur-grid',fi||{});
+  }else{
+    var today=new Date().toISOString().substring(0,10);
+    var in14=new Date();in14.setDate(in14.getDate()+14);
+    g('sub-plan').value=_plans.length?_plans[0].id:'';g('sub-status').value='trial';
+    g('sub-mulai').value=today;g('sub-selesai').value=in14.toISOString().substring(0,10);
+    buildFiturGrid('sub-fitur-grid',{});
   }
   g('modal-sub').classList.add('open');
 }
-
-function updateSubFitur() {
-  var planId = g('sub-plan').value;
-  var plan = _plans.find(function(p){ return p.id===planId; });
-  if (plan) buildFiturGrid('sub-fitur-grid', plan.fitur||{});
+function updateSubFitur(){
+  var planId=g('sub-plan').value;var plan=_plans.find(function(p){return p.id===planId;});
+  if(plan)buildFiturGrid('sub-fitur-grid',plan.fitur||{});
+}
+async function simpanSub(){
+  var tokoId=g('sub-edit-id').value;var planId=g('sub-plan').value;
+  if(!planId){showNotif('Pilih paket','#EF4444');return;}
+  var payload={restaurant_id:tokoId,plan_id:planId,status:g('sub-status').value,
+    mulai:g('sub-mulai').value,selesai:g('sub-selesai').value,
+    catatan:g('sub-catatan').value,fitur_override:getFiturFromGrid('sub-fitur-grid'),
+    updated_at:new Date().toISOString()};
+  try{
+    var existing=_subData.find(function(s){return s.restaurant_id===tokoId;});
+    if(existing){await _sb.from('subscriptions').update(payload).eq('id',existing.id);}
+    else{await _sb.from('subscriptions').insert(payload);}
+    g('modal-sub').classList.remove('open');showNotif('✅ Langganan diperbarui','#00B894');await loadAll();
+  }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
+}
+function showTambahPaket(){
+  g('modal-paket-title').textContent='💎 Tambah Paket';g('paket-edit-id').value='';
+  ['p-nama','p-badge','p-desc'].forEach(function(id){g(id).value='';});
+  g('p-harga').value=0;g('p-periode').value='bulan';
+  buildFiturGrid('paket-fitur-grid',{});g('modal-paket').classList.add('open');
+}
+function editPaket(planId){
+  var plan=_plans.find(function(p){return p.id===planId;});if(!plan)return;
+  g('modal-paket-title').textContent='✏️ Edit: '+plan.nama;g('paket-edit-id').value=planId;
+  g('p-nama').value=plan.nama||'';g('p-badge').value=plan.badge||'';
+  g('p-harga').value=plan.harga||0;g('p-periode').value=plan.periode||'bulan';
+  g('p-desc').value=plan.deskripsi||'';
+  var fi=plan.fitur;if(typeof fi==='string'){try{fi=JSON.parse(fi);}catch(e){fi={};}}
+  buildFiturGrid('paket-fitur-grid',fi||{});g('modal-paket').classList.add('open');
+}
+async function simpanPaket(){
+  var planId=g('paket-edit-id').value;var nama=g('p-nama').value.trim();
+  if(!nama){showNotif('Nama wajib','#EF4444');return;}
+  var payload={nama:nama,badge:g('p-badge').value.trim()||null,harga:parseInt(g('p-harga').value)||0,
+    periode:g('p-periode').value,deskripsi:g('p-desc').value.trim(),
+    fitur:getFiturFromGrid('paket-fitur-grid'),aktif:true};
+  try{
+    if(planId){await _sb.from('plans').update(payload).eq('id',planId);}
+    else{await _sb.from('plans').insert(payload);}
+    g('modal-paket').classList.remove('open');showNotif('✅ Paket disimpan','#00B894');await loadAll();
+  }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
+}
+async function hapusPaket(planId){
+  if(!confirm('Hapus paket?'))return;
+  try{await _sb.from('plans').delete().eq('id',planId);showNotif('✅ Dihapus','#00B894');await loadAll();}
+  catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
 
-async function simpanSub() {
-  var tokoId = g('sub-edit-id').value;
-  var planId = g('sub-plan').value;
-  if (!planId) { showNotif('Pilih paket','#EF4444'); return; }
-  var payload = {
-    restaurant_id: tokoId, plan_id: planId,
-    status: g('sub-status').value,
-    mulai: g('sub-mulai').value,
-    selesai: g('sub-selesai').value,
-    catatan: g('sub-catatan').value,
-    fitur_override: getFiturFromGrid('sub-fitur-grid'),
-    updated_at: new Date().toISOString()
-  };
-  try {
-    var existing = _subData.find(function(s){ return s.restaurant_id===tokoId; });
-    if (existing) { await _sb.from('subscriptions').update(payload).eq('id', existing.id); }
-    else { await _sb.from('subscriptions').insert(payload); }
-    g('modal-sub').classList.remove('open');
-    showNotif('✅ Langganan diperbarui','#00B894');
-    await loadAll();
-  } catch(e) { showNotif('Gagal: '+e.message,'#EF4444'); }
-}
-
-// ── PAKET ──
-function showTambahPaket() {
-  g('modal-paket-title').textContent = '💎 Tambah Paket';
-  g('paket-edit-id').value = '';
-  ['p-nama','p-badge','p-desc'].forEach(function(id){ g(id).value=''; });
-  g('p-harga').value = 0;
-  g('p-periode').value = 'bulan';
-  buildFiturGrid('paket-fitur-grid', {});
-  g('modal-paket').classList.add('open');
-}
-
-function editPaket(planId) {
-  var plan = _plans.find(function(p){ return p.id===planId; });
-  if (!plan) return;
-  g('modal-paket-title').textContent = '✏️ Edit Paket: '+plan.nama;
-  g('paket-edit-id').value = planId;
-  g('p-nama').value = plan.nama||'';
-  g('p-badge').value = plan.badge||'';
-  g('p-harga').value = plan.harga||0;
-  g('p-periode').value = plan.periode||'bulan';
-  g('p-desc').value = plan.deskripsi||'';
-  var fitur = plan.fitur;
-  if (typeof fitur==='string'){ try{fitur=JSON.parse(fitur);}catch(e){fitur={};} }
-  buildFiturGrid('paket-fitur-grid', fitur||{});
-  g('modal-paket').classList.add('open');
-}
-
-async function simpanPaket() {
-  var planId = g('paket-edit-id').value;
-  var nama = g('p-nama').value.trim();
-  if (!nama) { showNotif('Nama paket wajib','#EF4444'); return; }
-  var payload = {
-    nama: nama, badge: g('p-badge').value.trim()||null,
-    harga: parseInt(g('p-harga').value)||0,
-    periode: g('p-periode').value,
-    deskripsi: g('p-desc').value.trim(),
-    fitur: getFiturFromGrid('paket-fitur-grid'), aktif: true
-  };
-  try {
-    if (planId) { await _sb.from('plans').update(payload).eq('id', planId); }
-    else { await _sb.from('plans').insert(payload); }
-    g('modal-paket').classList.remove('open');
-    showNotif('✅ Paket disimpan','#00B894');
-    await loadAll();
-  } catch(e) { showNotif('Gagal: '+e.message,'#EF4444'); }
-}
-
-async function hapusPaket(planId) {
-  if (!confirm('Hapus paket ini?')) return;
-  try {
-    await _sb.from('plans').delete().eq('id', planId);
-    showNotif('✅ Paket dihapus','#00B894');
-    await loadAll();
-  } catch(e) { showNotif('Gagal: '+e.message,'#EF4444'); }
-}
 </script>
 </body>
 </html>
