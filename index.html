@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WarungKu Admin Panel</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F8F9FA;--bg2:#fff;--sidebar:#1E1B2E;--accent:#6C5CE7;--accent2:#A29BFE;
+  --green:#00B894;--green-bg:#D1FAE5;--green-dk:#065F46;
+  --red:#EF4444;--red-bg:#FEE2E2;--red-dk:#991B1B;
+  --amber:#F59E0B;--amber-bg:#FEF3C7;--amber-dk:#92400E;
+  --blue:#3B82F6;--blue-bg:#EFF6FF;--blue-dk:#1E40AF;
+  --txt:#1A1A2E;--txt2:#6B7280;--txt3:#9CA3AF;
+  --brd:#E5E7EB;--brd2:#D1D5DB;--radius:10px;
+  --shadow:0 2px 12px rgba(0,0,0,.08);
+  --font:'Segoe UI',system-ui,sans-serif;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--txt);height:100%;overflow:hidden}
+html{height:100%}
+#app{display:flex;height:100vh}
+
+/* Sidebar */
+.sidebar{width:220px;background:var(--sidebar);color:#fff;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sb-logo{padding:20px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sb-logo-title{font-size:16px;font-weight:800;color:#fff}
+.sb-logo-sub{font-size:10px;color:rgba(255,255,255,.4);margin-top:2px}
+.sb-nav{flex:1;padding:10px 0}
+.sb-item{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.7);border-radius:8px;margin:1px 8px;transition:all .15s}
+.sb-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.sb-item.active{background:var(--accent);color:#fff;font-weight:700}
+.sb-item .icon{font-size:16px;width:20px;text-align:center}
+.sb-section{font-size:9px;font-weight:700;color:rgba(255,255,255,.3);padding:10px 16px 4px;letter-spacing:1px;text-transform:uppercase}
+.sb-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;font-weight:700}
+
+/* Content */
+.content{flex:1;overflow-y:auto;padding:24px;min-height:0}
+.page{display:none}.page.active{display:block}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.page-title{font-size:20px;font-weight:800}
+.page-sub{font-size:12px;color:var(--txt2);margin-top:2px}
+
+/* Cards */
+.card{background:var(--bg2);border-radius:14px;padding:20px;box-shadow:var(--shadow);border:1px solid var(--brd);margin-bottom:14px}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-title{font-size:14px;font-weight:800}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.metric{background:var(--bg2);border-radius:12px;padding:16px;border:1px solid var(--brd)}
+.metric-val{font-size:28px;font-weight:900;margin-bottom:2px}
+.metric-lbl{font-size:11px;color:var(--txt2)}
+
+/* Table */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;padding:10px 12px;background:var(--bg);border-bottom:2px solid var(--brd);font-weight:700;font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--brd);vertical-align:middle}
+.tbl tr:hover td{background:var(--bg)}
+.tbl-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--brd)}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.badge-green{background:var(--green-bg);color:var(--green-dk)}
+.badge-red{background:var(--red-bg);color:var(--red-dk)}
+.badge-amber{background:var(--amber-bg);color:var(--amber-dk)}
+.badge-blue{background:var(--blue-bg);color:var(--blue-dk)}
+.badge-gray{background:var(--bg);color:var(--txt2);border:1px solid var(--brd)}
+
+/* Forms */
+.form-group{margin-bottom:12px}
+.form-lbl{display:block;font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+.fi{width:100%;padding:9px 12px;border:1.5px solid var(--brd2);border-radius:var(--radius);font-size:13px;font-family:var(--font);color:var(--txt);background:var(--bg);outline:none;transition:border-color .2s}
+.fi:focus{border-color:var(--accent)}
+textarea.fi{resize:vertical;min-height:70px}
+.frow{display:flex;gap:10px}
+.frow .form-group{flex:1}
+
+/* Buttons */
+.btn{padding:8px 16px;border-radius:var(--radius);border:1.5px solid var(--brd2);background:var(--bg2);font-size:13px;font-family:var(--font);cursor:pointer;font-weight:600;color:var(--txt);transition:all .15s}
+.btn:hover{background:var(--bg)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{opacity:.9}
+.btn-green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn-red{background:var(--red);color:#fff;border-color:var(--red)}
+.btn-sm{padding:5px 10px;font-size:11px;border-radius:7px}
+
+/* Modal */
+.modal-wrap{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center}
+.modal-wrap.open{display:flex}
+.modal{background:var(--bg2);border-radius:16px;padding:24px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+.modal h3{font-size:16px;font-weight:800;margin-bottom:14px}
+
+/* Feature checkboxes */
+.feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.feat-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid var(--brd);border-radius:8px;cursor:pointer;font-size:12px;transition:all .15s}
+.feat-item.on{border-color:var(--green);background:var(--green-bg)}
+.feat-item input{accent-color:var(--green)}
+
+/* Login */
+#login-screen{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--sidebar)}
+.login-box{background:#fff;border-radius:20px;padding:36px;width:360px;text-align:center}
+.login-icon{font-size:48px;margin-bottom:12px}
+.login-title{font-size:20px;font-weight:800;margin-bottom:4px}
+.login-sub{font-size:13px;color:var(--txt2);margin-bottom:24px}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:#1E1B2E;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+
+/* Responsive */
+@media(max-width:768px){
+  .sidebar{width:180px}.g3{grid-template-columns:1fr 1fr}
+  .content{padding:14px}
+}
+@media(max-width:480px){
+  #app{flex-direction:column}
+  .sidebar{width:100%;flex-direction:row;overflow-x:auto;overflow-y:hidden;height:auto}
+  .sb-nav{display:flex;flex-direction:row;padding:6px}
+  .sb-section{display:none}
+  .sb-logo{padding:10px 16px;white-space:nowrap;flex-shrink:0}
+  .g3{grid-template-columns:1fr}.g2{grid-template-columns:1fr}
+  .content{padding:10px}
+}
+</style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-icon">🛡️</div>
+    <div class="login-title">WarungKu Admin</div>
+    <div class="login-sub">Super Admin Panel</div>
+    <div class="form-group" style="text-align:left">
+      <label class="form-lbl">Password Admin</label>
+      <input class="fi" type="password" id="admin-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doAdminLogin()">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doAdminLogin()">🔐 Masuk</button>
+    <div id="login-err" style="color:var(--red-dk);font-size:12px;margin-top:10px;display:none"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Main App -->
+<div id="app" style="display:none">
+  <div class="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-title">🛡️ WK Admin</div>
+      <div class="sb-logo-sub">Super Admin Panel</div>
+    </div>
+    <div class="sb-nav">
+      <div class="sb-section">Dashboard</div>
+      <div class="sb-item active" onclick="nav('dashboard')" data-p="dashboard"><span class="icon">📊</span> Dashboard</div>
+      <div class="sb-section">Manajemen</div>
+      <div class="sb-item" onclick="nav('toko')" data-p="toko"><span class="icon">🏪</span> Daftar Toko <span class="sb-badge" id="badge-pending" style="display:none">0</span></div>
+      <div class="sb-item" onclick="nav('langganan')" data-p="langganan"><span class="icon">📋</span> Langganan</div>
+      <div class="sb-section">Konfigurasi</div>
+      <div class="sb-item" onclick="nav('paket')" data-p="paket"><span class="icon">💎</span> Paket & Harga</div>
+      <div class="sb-section">Akun</div>
+      <div class="sb-item" onclick="doLogout()" data-p=""><span class="icon">🚪</span> Keluar</div>
+    </div>
+  </div>
+  <div class="content">
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="topbar">
+        <div><div class="page-title">📊 Dashboard</div><div class="page-sub">Ringkasan sistem WarungKu</div></div>
+        <button class="btn btn-sm" onclick="loadAll()">🔄 Refresh</button>
+      </div>
+      <div class="g3" id="dash-metrics">
+        <div class="metric"><div class="metric-val" id="m-toko">-</div><div class="metric-lbl">Total Toko</div></div>
+        <div class="metric"><div class="metric-val" id="m-aktif">-</div><div class="metric-lbl">Aktif / Trial</div></div>
+        <div class="metric"><div class="metric-val" id="m-expired">-</div><div class="metric-lbl">Expired</div></div>
+      </div>
+      <div class="g2">
+        <div class="card">
+          <div class="card-hd"><span class="card-title">⚠️ Akan Expired (7 hari)</span></div>
+          <div id="dash-soon-expire" style="font-size:13px;color:var(--txt2)">Memuat...</div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">🆕 Toko Baru</span></div>
+          <div id="dash-new-toko" style="font-size:13px;color:var(--txt2)">Memuat...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOKO -->
+    <div class="page" id="page-toko">
+      <div class="topbar">
+        <div><div class="page-title">🏪 Daftar Toko</div><div class="page-sub">Kelola semua toko yang terdaftar</div></div>
+        <div style="display:flex;gap:8px">
+          <input class="fi" id="toko-search" placeholder="Cari nama toko..." style="width:200px" oninput="filterToko()">
+          <button class="btn btn-primary" onclick="showTambahToko()">➕ Tambah Toko</button>
+        </div>
+      </div>
+      <!-- Filter tabs -->
+      <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn btn-sm active" id="ft-all" onclick="setTokoFilter('all',this)">Semua</button>
+        <button class="btn btn-sm" id="ft-active" onclick="setTokoFilter('active',this)">✅ Aktif</button>
+        <button class="btn btn-sm" id="ft-trial" onclick="setTokoFilter('trial',this)">🎯 Trial</button>
+        <button class="btn btn-sm" id="ft-expired" onclick="setTokoFilter('expired',this)">⏰ Expired</button>
+        <button class="btn btn-sm" id="ft-pending" onclick="setTokoFilter('pending',this)">⏳ Pending</button>
+      </div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr>
+          <th>Toko</th><th>Owner</th><th>Paket</th><th>Status</th><th>Selesai</th><th>Aksi</th>
+        </tr></thead>
+        <tbody id="toko-tbody"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--txt3)">Memuat...</td></tr></tbody>
+      </table></div>
+    </div>
+
+    <!-- LANGGANAN -->
+    <div class="page" id="page-langganan">
+      <div class="topbar">
+        <div><div class="page-title">📋 Manajemen Langganan</div><div class="page-sub">Atur periode dan fitur per toko</div></div>
+      </div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr>
+          <th>Toko</th><th>Paket</th><th>Mulai</th><th>Selesai</th><th>Status</th><th>Fitur Aktif</th><th>Aksi</th>
+        </tr></thead>
+        <tbody id="sub-tbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--txt3)">Memuat...</td></tr></tbody>
+      </table></div>
+    </div>
+
+    <!-- PAKET -->
+    <div class="page" id="page-paket">
+      <div class="topbar">
+        <div><div class="page-title">💎 Paket & Harga</div><div class="page-sub">Kelola paket langganan</div></div>
+        <button class="btn btn-primary" onclick="showTambahPaket()">➕ Tambah Paket</button>
+      </div>
+      <div id="paket-cards" class="g2">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Tambah/Edit Toko -->
+<div class="modal-wrap" id="modal-toko">
+  <div class="modal">
+    <h3 id="modal-toko-title">🏪 Tambah Toko</h3>
+    <input type="hidden" id="toko-edit-id">
+    <div class="frow">
+      <div class="form-group"><label class="form-lbl">Nama Toko</label><input class="fi" id="t-nama" placeholder="WarungKu Madiun"></div>
+      <div class="form-group"><label class="form-lbl">Logo Emoji</label><input class="fi" id="t-logo" placeholder="🍜" style="font-size:20px;text-align:center"></div>
+    </div>
+    <div class="form-group"><label class="form-lbl">Nama Owner</label><input class="fi" id="t-owner-nama" placeholder="Budi Santoso"></div>
+    <div class="frow">
+      <div class="form-group"><label class="form-lbl">Email</label><input class="fi" id="t-email" type="email" placeholder="budi@email.com"></div>
+      <div class="form-group"><label class="form-lbl">No. HP</label><input class="fi" id="t-hp" placeholder="08xxxxxxxxxx"></div>
+    </div>
+    <div class="form-group"><label class="form-lbl">Alamat</label><input class="fi" id="t-alamat" placeholder="Jl. Merdeka No. 1"></div>
+    <div class="frow">
+      <div class="form-group"><label class="form-lbl">Paket</label>
+        <select class="fi" id="t-plan" onchange="updateFiturFromPlan()"><option value="">-- Pilih --</option></select>
+      </div>
+      <div class="form-group"><label class="form-lbl">Status</label>
+        <select class="fi" id="t-status">
+          <option value="trial">🎯 Trial</option>
+          <option value="active">✅ Aktif</option>
+          <option value="pending">⏳ Pending</option>
+          <option value="suspended">🚫 Suspended</option>
+        </select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="form-group"><label class="form-lbl">Mulai</label><input class="fi" type="date" id="t-mulai"></div>
+      <div class="form-group"><label class="form-lbl">Selesai</label><input class="fi" type="date" id="t-selesai"></div>
+    </div>
+    <div class="form-group"><label class="form-lbl">Override Fitur (opsional)</label>
+      <div class="feature-grid" id="fitur-override-grid"></div>
+    </div>
+    <div class="form-group"><label class="form-lbl">Catatan</label><textarea class="fi" id="t-catatan" rows="2"></textarea></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn" style="flex:1" onclick="closeTambahToko()">Batal</button>
+      <button class="btn btn-primary" style="flex:2" onclick="simpanToko()">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Edit Langganan -->
+<div class="modal-wrap" id="modal-sub">
+  <div class="modal">
+    <h3>📋 Edit Langganan</h3>
+    <input type="hidden" id="sub-edit-id">
+    <div class="form-group"><label class="form-lbl">Toko</label><input class="fi" id="sub-toko-nama" readonly style="background:var(--bg)"></div>
+    <div class="frow">
+      <div class="form-group"><label class="form-lbl">Paket</label>
+        <select class="fi" id="sub-plan" onchange="updateSubFitur()"><option value="">-- Pilih --</option></select>
+      </div>
+      <div class="form-group"><label class="form-lbl">Status</label>
+        <select class="fi" id="sub-status">
+          <option value="trial">🎯 Trial</option>
+          <option value="active">✅ Aktif</option>
+          <option value="expired">⏰ Expired</option>
+          <option value="suspended">🚫 Suspended</option>
+        </select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="form-group"><label class="form-lbl">Mulai</label><input class="fi" type="date" id="sub-mulai"></div>
+      <div class="form-group"><label class="form-lbl">Selesai</label><input class="fi" type="date" id="sub-selesai"></div>
+    </div>
+    <div class="form-group"><label class="form-lbl">Override Fitur</label>
+      <div class="feature-grid" id="sub-fitur-grid"></div>
+    </div>
+    <div class="form-group"><label class="form-lbl">Catatan</label><textarea class="fi" id="sub-catatan" rows="2"></textarea></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn" style="flex:1" onclick="document.getElementById('modal-sub').classList.remove('open')">Batal</button>
+      <button class="btn btn-primary" style="flex:2" onclick="simpanSub()">💾 Simpan Langganan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Tambah Paket -->
+<div class="modal-wrap" id="modal-paket">
+  <div class="modal">
+    <h3 id="modal-paket-title">💎 Tambah Paket</h3>
+    <input type="hidden" id="paket-edit-id">
+    <div class="frow">
+      <div class="form-group"><label class="form-lbl">Nama Paket</label><input class="fi" id="p-nama" placeholder="Bisnis"></div>
+      <div class="form-group"><label class="form-lbl">Badge</label><input class="fi" id="p-badge" placeholder="Populer"></div>
+    </div>
+    <div class="frow">
+      <div class="form-group"><label class="form-lbl">Harga (Rp)</label><input class="fi" type="number" id="p-harga" placeholder="199000"></div>
+      <div class="form-group"><label class="form-lbl">Periode</label>
+        <select class="fi" id="p-periode"><option value="bulan">Per Bulan</option><option value="tahun">Per Tahun</option></select>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-lbl">Deskripsi</label><input class="fi" id="p-desc" placeholder="Untuk usaha yang berkembang"></div>
+    <div class="form-group"><label class="form-lbl">Fitur yang Termasuk</label>
+      <div class="feature-grid" id="paket-fitur-grid"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn" style="flex:1" onclick="document.getElementById('modal-paket').classList.remove('open')">Batal</button>
+      <button class="btn btn-primary" style="flex:2" onclick="simpanPaket()">💾 Simpan Paket</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SB_URL =  + SB_URL + ;
+const SB_KEY =  + SB_KEY + ;
+const ADMIN_PASS = 'warungku2025admin'; // Ganti dengan password kuat
+const FITUR_LIST = [
+  {key:'kasir', label:'🛒 Kasir & Order'},
+  {key:'meja', label:'🪑 Manajemen Meja'},
+  {key:'shift', label:'🔓 Shift Kasir'},
+  {key:'menu', label:'🍽️ Menu & Harga'},
+  {key:'stok', label:'📦 Stok Bahan'},
+  {key:'laporan', label:'📊 Laporan'},
+  {key:'riwayat', label:'📋 Riwayat Transaksi'},
+  {key:'online_order', label:'🛵 Pesanan Online'},
+  {key:'member', label:'👥 Member & Poin'},
+  {key:'rekrutmen', label:'📝 Rekrutmen'},
+  {key:'multi_user', label:'👤 Multi User/Kasir'},
+];
+
+var _sb = null, _plans = [], _tokoData = [], _subData = [], _tokoFilter = 'all';
+
+function g(id){ return document.getElementById(id); }
+
+function showNotif(msg, color){
+  var t = g('toast'); t.textContent = msg;
+  t.style.background = color||'#1E1B2E';
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2800);
+}
+
+// ── AUTH ──
+function doAdminLogin() {
+  var pass = g('admin-pass').value;
+  if (pass !== ADMIN_PASS) {
+    g('login-err').textContent = 'Password salah';
+    g('login-err').style.display = 'block';
+    return;
+  }
+  _sb = window.supabase.createClient(SB_URL, SB_KEY);
+  g('login-screen').style.display = 'none';
+  g('app').style.display = 'flex';
+  loadAll();
+}
+
+function doLogout() {
+  g('login-screen').style.display = 'flex';
+  g('app').style.display = 'none';
+  g('admin-pass').value = '';
+}
+
+// ── NAV ──
+function nav(p) {
+  document.querySelectorAll('.sb-item').forEach(function(el){
+    el.classList.toggle('active', el.dataset.p === p);
+  });
+  document.querySelectorAll('.page').forEach(function(el){
+    el.classList.remove('active');
+  });
+  var pg = g('page-'+p); if(pg) pg.classList.add('active');
+  if (p==='toko') renderTokoTable();
+  if (p==='langganan') renderSubTable();
+  if (p==='paket') renderPaketCards();
+  if (p==='dashboard') renderDashboard();
+}
+
+// ── LOAD ALL ──
+async function loadAll() {
+  try {
+    var [rPlan, rResto, rSub] = await Promise.all([
+      _sb.from('plans').select('*').order('urutan'),
+      _sb.from('restaurants').select('*').order('created_at', {ascending:false}),
+      _sb.from('subscriptions').select('*,plans(nama,harga)').order('created_at', {ascending:false})
+    ]);
+    _plans = rPlan.data || [];
+    _tokoData = rResto.data || [];
+    _subData = rSub.data || [];
+    renderDashboard();
+    renderTokoTable();
+    renderSubTable();
+    renderPaketCards();
+    // Update plan dropdowns
+    var opts = '<option value="">-- Pilih Paket --</option>' + _plans.map(function(p){
+      return '<option value="'+p.id+'">'+p.nama+' (Rp '+p.harga.toLocaleString('id-ID')+'/'+p.periode+')</option>';
+    }).join('');
+    ['t-plan','sub-plan'].forEach(function(id){ var el=g(id); if(el) el.innerHTML=opts; });
+    // Badge pending
+    var pending = _tokoData.filter(function(t){ return t.status==='pending'; });
+    var badge = g('badge-pending');
+    if (badge) { badge.textContent = pending.length; badge.style.display = pending.length>0?'inline':'none'; }
+  } catch(e) { showNotif('Gagal load: '+e.message, '#EF4444'); }
+}
+
+// ── DASHBOARD ──
+function renderDashboard() {
+  var now = new Date();
+  var in7 = new Date(now); in7.setDate(in7.getDate()+7);
+  var aktif = _subData.filter(function(s){ return s.status==='active'||s.status==='trial'; });
+  var expired = _subData.filter(function(s){ return s.status==='expired'||(s.selesai&&new Date(s.selesai)<now); });
+  g('m-toko').textContent = _tokoData.length;
+  g('m-aktif').textContent = aktif.length;
+  g('m-expired').textContent = expired.length;
+  // Soon expire
+  var soon = _subData.filter(function(s){
+    if (!s.selesai) return false;
+    var d = new Date(s.selesai);
+    return d >= now && d <= in7 && s.status !== 'expired';
+  });
+  g('dash-soon-expire').innerHTML = soon.length ? soon.map(function(s){
+    var toko = _tokoData.find(function(t){ return t.id===s.restaurant_id; });
+    var sisa = Math.ceil((new Date(s.selesai)-now)/86400000);
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between">' +
+      '<span>🏪 '+(toko?toko.nama:'-')+'</span>' +
+      '<span style="color:var(--amber-dk);font-weight:700">'+sisa+' hari lagi</span></div>';
+  }).join('') : '<div style="padding:12px 0;color:var(--txt3)">Tidak ada yang akan expired</div>';
+  // New toko
+  var newToko = _tokoData.slice(0,5);
+  g('dash-new-toko').innerHTML = newToko.length ? newToko.map(function(t){
+    var tgl = t.created_at ? new Date(t.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short'}) : '-';
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between">' +
+      '<span>🏪 '+t.nama+'</span><span style="color:var(--txt2);font-size:11px">'+tgl+'</span></div>';
+  }).join('') : '<div style="padding:12px 0;color:var(--txt3)">Belum ada toko</div>';
+}
+
+// ── TOKO TABLE ──
+var _tokoSearch = '';
+function filterToko(){ _tokoSearch = (g('toko-search')||{value:''}).value.toLowerCase(); renderTokoTable(); }
+function setTokoFilter(f, btn) {
+  _tokoFilter = f;
+  document.querySelectorAll('[id^="ft-"]').forEach(function(b){ b.classList.remove('active'); });
+  if(btn) btn.classList.add('active');
+  renderTokoTable();
+}
+
+function renderTokoTable() {
+  var now = new Date();
+  var data = _tokoData.filter(function(t){
+    if (_tokoSearch && !(t.nama||'').toLowerCase().includes(_tokoSearch)) return false;
+    var sub = _subData.find(function(s){ return s.restaurant_id===t.id; });
+    var subStatus = sub ? (new Date(sub.selesai)<now && sub.status!=='active' ? 'expired' : sub.status) : 'none';
+    if (_tokoFilter === 'all') return true;
+    return subStatus === _tokoFilter || t.status === _tokoFilter;
+  });
+  var tbody = g('toko-tbody');
+  if (!data.length) { tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--txt3)">Tidak ada toko</td></tr>'; return; }
+  var now2 = new Date();
+  tbody.innerHTML = data.map(function(t) {
+    var sub = _subData.find(function(s){ return s.restaurant_id===t.id; });
+    var planNama = sub&&sub.plans ? sub.plans.nama : '-';
+    var subStatus = sub ? sub.status : 'none';
+    if (sub && sub.selesai && new Date(sub.selesai) < now2) subStatus = 'expired';
+    var selesai = sub&&sub.selesai ? new Date(sub.selesai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
+    var sisa = sub&&sub.selesai ? Math.ceil((new Date(sub.selesai)-now2)/86400000) : 0;
+    var statusBadge = {
+      active:'<span class="badge badge-green">✅ Aktif</span>',
+      trial:'<span class="badge badge-blue">🎯 Trial</span>',
+      expired:'<span class="badge badge-red">⏰ Expired</span>',
+      pending:'<span class="badge badge-amber">⏳ Pending</span>',
+      suspended:'<span class="badge badge-gray">🚫 Suspended</span>',
+      none:'<span class="badge badge-gray">—</span>'
+    }[subStatus] || '<span class="badge badge-gray">'+subStatus+'</span>';
+    return '<tr>' +
+      '<td><div style="font-weight:700">'+(t.logo||'🏪')+' '+t.nama+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.alamat||'-')+'</div></td>' +
+      '<td><div>'+(t.owner_nama||'-')+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.owner_hp||'-')+'</div></td>' +
+      '<td>'+planNama+'</td>' +
+      '<td>'+statusBadge+'</td>' +
+      '<td><div>'+selesai+'</div>'+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari lagi</div>':'')+'</td>' +
+      '<td><div style="display:flex;gap:4px">' +
+        '<button class="btn btn-sm" onclick="editToko(''+t.id+'')">✏️</button>' +
+        '<button class="btn btn-sm btn-primary" onclick="editSub(''+t.id+'')">📋 Sub</button>' +
+        '<button class="btn btn-sm" style="color:var(--red-dk)" onclick="hapusToko(''+t.id+'')">🗑️</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ── SUBSCRIPTION TABLE ──
+function renderSubTable() {
+  var now = new Date();
+  var tbody = g('sub-tbody');
+  if (!_subData.length) { tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--txt3)">Belum ada langganan</td></tr>'; return; }
+  tbody.innerHTML = _subData.map(function(s) {
+    var toko = _tokoData.find(function(t){ return t.id===s.restaurant_id; });
+    var planNama = s.plans ? s.plans.nama : '-';
+    var status = s.status;
+    if (s.selesai && new Date(s.selesai)<now) status='expired';
+    var statusBadge = {
+      active:'<span class="badge badge-green">✅ Aktif</span>',
+      trial:'<span class="badge badge-blue">🎯 Trial</span>',
+      expired:'<span class="badge badge-red">⏰ Expired</span>',
+      suspended:'<span class="badge badge-gray">🚫 Suspend</span>'
+    }[status] || '<span class="badge badge-gray">'+status+'</span>';
+    var fitur = {};
+    try{ fitur = s.fitur_override ? JSON.parse(typeof s.fitur_override==='string'?s.fitur_override:JSON.stringify(s.fitur_override)) : {}; }catch(e){}
+    var fiturCount = Object.values(fitur).filter(Boolean).length;
+    var mulai = s.mulai ? new Date(s.mulai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'2-digit'}) : '-';
+    var selesai = s.selesai ? new Date(s.selesai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'2-digit'}) : '-';
+    return '<tr>' +
+      '<td><div style="font-weight:700">'+(toko?toko.nama:'-')+'</div></td>' +
+      '<td>'+planNama+'</td>' +
+      '<td>'+mulai+'</td><td>'+selesai+'</td>' +
+      '<td>'+statusBadge+'</td>' +
+      '<td><span style="font-size:11px;color:var(--txt2)">'+fiturCount+' override</span></td>' +
+      '<td><button class="btn btn-sm btn-primary" onclick="editSub(''+s.restaurant_id+'')">✏️ Edit</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ── PAKET CARDS ──
+function renderPaketCards() {
+  var el = g('paket-cards');
+  if (!_plans.length) { el.innerHTML='<div style="color:var(--txt3)">Belum ada paket</div>'; return; }
+  el.innerHTML = _plans.map(function(plan) {
+    var fitur = plan.fitur || {};
+    var fiturOn = FITUR_LIST.filter(function(f){ return fitur[f.key]; });
+    return '<div class="card">' +
+      '<div class="card-hd">' +
+        '<div>' +
+          '<div class="card-title">'+plan.nama+(plan.badge?'<span style="margin-left:6px;background:var(--accent);color:#fff;font-size:9px;padding:2px 8px;border-radius:10px">'+plan.badge+'</span>':'')+'</div>' +
+          '<div style="font-size:13px;font-weight:800;color:var(--accent);margin-top:2px">'+
+            (plan.harga===0?'Gratis':'Rp '+plan.harga.toLocaleString('id-ID'))+
+            '<span style="font-size:11px;color:var(--txt2);font-weight:400">/'+plan.periode+'</span></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:4px">' +
+          '<button class="btn btn-sm" onclick="editPaket(''+plan.id+'')">✏️</button>' +
+          '<button class="btn btn-sm" style="color:var(--red-dk)" onclick="hapusPaket(''+plan.id+'')">🗑️</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--txt2);margin-bottom:10px">'+plan.deskripsi+'</div>' +
+      '<div>'+fiturOn.map(function(f){ return '<div style="font-size:11px;padding:3px 0">✅ '+f.label+'</div>'; }).join('')+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── FITUR GRID BUILDER ──
+function buildFiturGrid(containerId, values) {
+  var el = g(containerId); if(!el) return;
+  el.innerHTML = FITUR_LIST.map(function(f) {
+    var on = values && values[f.key];
+    return '<label class="feat-item '+(on?'on':'')+'">'+
+      '<input type="checkbox" '+(on?'checked':'')+' onchange="toggleFeatItem(this)" data-key="'+f.key+'">'+
+      f.label+'</label>';
+  }).join('');
+  el.querySelectorAll('.feat-item input').forEach(function(inp){
+    inp.addEventListener('change', function(){
+      inp.closest('.feat-item').classList.toggle('on', inp.checked);
+    });
+  });
+}
+
+function toggleFeatItem(inp){
+  inp.closest('.feat-item').classList.toggle('on', inp.checked);
+}
+
+function getFiturFromGrid(containerId) {
+  var el = g(containerId); if(!el) return {};
+  var result = {};
+  el.querySelectorAll('input[data-key]').forEach(function(inp){
+    result[inp.dataset.key] = inp.checked;
+  });
+  return result;
+}
+
+// ── TAMBAH/EDIT TOKO ──
+function showTambahToko() {
+  g('modal-toko-title').textContent = '🏪 Tambah Toko';
+  g('toko-edit-id').value = '';
+  ['t-nama','t-logo','t-owner-nama','t-email','t-hp','t-alamat','t-catatan'].forEach(function(id){ var el=g(id); if(el) el.value=''; });
+  g('t-logo').value = '🍜';
+  g('t-status').value = 'trial';
+  var today = new Date().toISOString().substring(0,10);
+  var in14 = new Date(); in14.setDate(in14.getDate()+14);
+  g('t-mulai').value = today;
+  g('t-selesai').value = in14.toISOString().substring(0,10);
+  buildFiturGrid('fitur-override-grid', {});
+  g('modal-toko').classList.add('open');
+}
+
+function updateFiturFromPlan() {
+  var planId = g('t-plan').value;
+  var plan = _plans.find(function(p){ return p.id===planId; });
+  if (plan) buildFiturGrid('fitur-override-grid', plan.fitur||{});
+}
+
+function editToko(tokoId) {
+  var t = _tokoData.find(function(x){ return x.id===tokoId; });
+  var sub = _subData.find(function(s){ return s.restaurant_id===tokoId; });
+  if (!t) return;
+  g('modal-toko-title').textContent = '✏️ Edit Toko: '+t.nama;
+  g('toko-edit-id').value = tokoId;
+  g('t-nama').value = t.nama||'';
+  g('t-logo').value = t.logo||'🍜';
+  g('t-owner-nama').value = t.owner_nama||'';
+  g('t-email').value = t.owner_email||'';
+  g('t-hp').value = t.owner_hp||'';
+  g('t-alamat').value = t.alamat||'';
+  if (sub) {
+    g('t-plan').value = sub.plan_id||'';
+    g('t-status').value = sub.status||'trial';
+    g('t-mulai').value = sub.mulai||'';
+    g('t-selesai').value = sub.selesai||'';
+    g('t-catatan').value = sub.catatan||'';
+    var fitur = sub.fitur_override;
+    if (typeof fitur === 'string') { try{ fitur=JSON.parse(fitur); }catch(e){ fitur={}; } }
+    buildFiturGrid('fitur-override-grid', fitur||{});
+  }
+  g('modal-toko').classList.add('open');
+}
+
+async function simpanToko() {
+  var tokoId = g('toko-edit-id').value;
+  var nama = g('t-nama').value.trim();
+  if (!nama) { showNotif('Nama toko wajib diisi','#EF4444'); return; }
+  var tokoData = {
+    nama: nama, logo: g('t-logo').value.trim()||'🍜',
+    owner_nama: g('t-owner-nama').value.trim(),
+    owner_email: g('t-email').value.trim(),
+    owner_hp: g('t-hp').value.trim(),
+    alamat: g('t-alamat').value.trim(),
+    status: 'active'
+  };
+  var planId = g('t-plan').value;
+  var subStatus = g('t-status').value;
+  var mulai = g('t-mulai').value;
+  var selesai = g('t-selesai').value;
+  var catatan = g('t-catatan').value.trim();
+  var fiturOverride = getFiturFromGrid('fitur-override-grid');
+  try {
+    var rid;
+    if (tokoId) {
+      await _sb.from('restaurants').update(tokoData).eq('id', tokoId);
+      rid = tokoId;
+    } else {
+      var rr = await _sb.from('restaurants').insert(tokoData).select('id').single();
+      if (rr.error) throw rr.error;
+      rid = rr.data.id;
+    }
+    if (planId) {
+      var subPayload = { restaurant_id:rid, plan_id:planId, status:subStatus, mulai:mulai, selesai:selesai, catatan:catatan, fitur_override:fiturOverride };
+      var existSub = _subData.find(function(s){ return s.restaurant_id===rid; });
+      if (existSub) { await _sb.from('subscriptions').update(subPayload).eq('id', existSub.id); }
+      else { await _sb.from('subscriptions').insert(subPayload); }
+    }
+    g('modal-toko').classList.remove('open');
+    showNotif('✅ Toko berhasil disimpan','#00B894');
+    await loadAll();
+  } catch(e) { showNotif('Gagal: '+e.message,'#EF4444'); }
+}
+
+function closeTambahToko(){ g('modal-toko').classList.remove('open'); }
+
+async function hapusToko(tokoId) {
+  if (!confirm('Hapus toko ini beserta data langganannya?')) return;
+  try {
+    await _sb.from('subscriptions').delete().eq('restaurant_id', tokoId);
+    await _sb.from('restaurants').delete().eq('id', tokoId);
+    showNotif('✅ Toko dihapus','#00B894');
+    await loadAll();
+  } catch(e) { showNotif('Gagal: '+e.message,'#EF4444'); }
+}
+
+// ── EDIT SUBSCRIPTION ──
+function editSub(tokoId) {
+  var toko = _tokoData.find(function(t){ return t.id===tokoId; });
+  var sub = _subData.find(function(s){ return s.restaurant_id===tokoId; });
+  if (!toko) return;
+  g('sub-edit-id').value = tokoId;
+  g('sub-toko-nama').value = toko.nama;
+  if (sub) {
+    g('sub-plan').value = sub.plan_id||'';
+    g('sub-status').value = sub.status||'trial';
+    g('sub-mulai').value = sub.mulai||'';
+    g('sub-selesai').value = sub.selesai||'';
+    g('sub-catatan').value = sub.catatan||'';
+    var fitur = sub.fitur_override;
+    if (typeof fitur==='string'){ try{ fitur=JSON.parse(fitur); }catch(e){ fitur={}; } }
+    buildFiturGrid('sub-fitur-grid', fitur||{});
+  } else {
+    var planId = _plans.length ? _plans[0].id : '';
+    g('sub-plan').value = planId;
+    g('sub-status').value = 'trial';
+    var today = new Date().toISOString().substring(0,10);
+    var in14 = new Date(); in14.setDate(in14.getDate()+14);
+    g('sub-mulai').value = today;
+    g('sub-selesai').value = in14.toISOString().substring(0,10);
+    buildFiturGrid('sub-fitur-grid', {});
+  }
+  g('modal-sub').classList.add('open');
+}
+
+function updateSubFitur() {
+  var planId = g('sub-plan').value;
+  var plan = _plans.find(function(p){ return p.id===planId; });
+  if (plan) buildFiturGrid('sub-fitur-grid', plan.fitur||{});
+}
+
+async function simpanSub() {
+  var tokoId = g('sub-edit-id').value;
+  var planId = g('sub-plan').value;
+  if (!planId) { showNotif('Pilih paket','#EF4444'); return; }
+  var payload = {
+    restaurant_id: tokoId, plan_id: planId,
+    status: g('sub-status').value,
+    mulai: g('sub-mulai').value,
+    selesai: g('sub-selesai').value,
+    catatan: g('sub-catatan').value,
+    fitur_override: getFiturFromGrid('sub-fitur-grid'),
+    updated_at: new Date().toISOString()
+  };
+  try {
+    var existing = _subData.find(function(s){ return s.restaurant_id===tokoId; });
+    if (existing) { await _sb.from('subscriptions').update(payload).eq('id', existing.id); }
+    else { await _sb.from('subscriptions').insert(payload); }
+    g('modal-sub').classList.remove('open');
+    showNotif('✅ Langganan diperbarui','#00B894');
+    await loadAll();
+  } catch(e) { showNotif('Gagal: '+e.message,'#EF4444'); }
+}
+
+// ── PAKET ──
+function showTambahPaket() {
+  g('modal-paket-title').textContent = '💎 Tambah Paket';
+  g('paket-edit-id').value = '';
+  ['p-nama','p-badge','p-desc'].forEach(function(id){ g(id).value=''; });
+  g('p-harga').value = 0;
+  g('p-periode').value = 'bulan';
+  buildFiturGrid('paket-fitur-grid', {});
+  g('modal-paket').classList.add('open');
+}
+
+function editPaket(planId) {
+  var plan = _plans.find(function(p){ return p.id===planId; });
+  if (!plan) return;
+  g('modal-paket-title').textContent = '✏️ Edit Paket: '+plan.nama;
+  g('paket-edit-id').value = planId;
+  g('p-nama').value = plan.nama||'';
+  g('p-badge').value = plan.badge||'';
+  g('p-harga').value = plan.harga||0;
+  g('p-periode').value = plan.periode||'bulan';
+  g('p-desc').value = plan.deskripsi||'';
+  var fitur = plan.fitur;
+  if (typeof fitur==='string'){ try{fitur=JSON.parse(fitur);}catch(e){fitur={};} }
+  buildFiturGrid('paket-fitur-grid', fitur||{});
+  g('modal-paket').classList.add('open');
+}
+
+async function simpanPaket() {
+  var planId = g('paket-edit-id').value;
+  var nama = g('p-nama').value.trim();
+  if (!nama) { showNotif('Nama paket wajib','#EF4444'); return; }
+  var payload = {
+    nama: nama, badge: g('p-badge').value.trim()||null,
+    harga: parseInt(g('p-harga').value)||0,
+    periode: g('p-periode').value,
+    deskripsi: g('p-desc').value.trim(),
+    fitur: getFiturFromGrid('paket-fitur-grid'), aktif: true
+  };
+  try {
+    if (planId) { await _sb.from('plans').update(payload).eq('id', planId); }
+    else { await _sb.from('plans').insert(payload); }
+    g('modal-paket').classList.remove('open');
+    showNotif('✅ Paket disimpan','#00B894');
+    await loadAll();
+  } catch(e) { showNotif('Gagal: '+e.message,'#EF4444'); }
+}
+
+async function hapusPaket(planId) {
+  if (!confirm('Hapus paket ini?')) return;
+  try {
+    await _sb.from('plans').delete().eq('id', planId);
+    showNotif('✅ Paket dihapus','#00B894');
+    await loadAll();
+  } catch(e) { showNotif('Gagal: '+e.message,'#EF4444'); }
+}
+</script>
+</body>
+</html>
