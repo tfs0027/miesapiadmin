@@ -160,6 +160,7 @@ textarea.fi{resize:vertical;min-height:70px}
       <div class="sb-section">Konfigurasi</div>
       <div class="sb-item" onclick="nav('paket')" data-p="paket"><span class="icon">💎</span> Paket & Harga</div>
       <div class="sb-section">Akun</div>
+      <div class="sb-item" onclick="nav('pengaturan')" data-p="pengaturan"><span class="icon">⚙️</span> Pengaturan</div>
       <div class="sb-item" onclick="doLogout()" data-p=""><span class="icon">🚪</span> Keluar</div>
     </div>
   </div>
@@ -234,6 +235,48 @@ textarea.fi{resize:vertical;min-height:70px}
       <div id="paket-cards" class="g2">Loading...</div>
     </div>
   </div>
+    <!-- PENGATURAN -->
+    <div class="page" id="page-pengaturan">
+      <div class="topbar">
+        <div><div class="page-title">⚙️ Pengaturan Admin</div><div class="page-sub">Konfigurasi sistem</div></div>
+      </div>
+      <div class="g2">
+        <div class="card">
+          <div class="card-hd"><span class="card-title">🔗 URL Aplikasi</span></div>
+          <div style="font-size:12px;color:var(--txt2);margin-bottom:12px;line-height:1.7">
+            URL dasar GitHub Pages tempat file-file WarungKu di-hosting. Digunakan untuk generate link POS yang dikirim ke kasir.
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">URL GitHub Pages (akhiri dengan /)</label>
+            <input class="fi" id="cfg-pos-base-url" placeholder="https://username.github.io/namarepository/">
+          </div>
+          <div style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--txt2);margin-bottom:12px">
+            <div style="font-weight:700;margin-bottom:4px">Preview link POS:</div>
+            <div id="preview-pos-link" style="font-family:monospace;color:var(--accent);word-break:break-all">-</div>
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="savePengaturanAdmin()">💾 Simpan</button>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">🔐 Password Admin</span></div>
+          <div style="font-size:12px;color:var(--txt2);margin-bottom:12px">Ubah password login super admin.</div>
+          <div class="form-group">
+            <label class="form-lbl">Password Lama</label>
+            <input class="fi" type="password" id="cfg-pass-lama" placeholder="••••••••">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Password Baru</label>
+            <input class="fi" type="password" id="cfg-pass-baru" placeholder="••••••••">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Konfirmasi Password Baru</label>
+            <input class="fi" type="password" id="cfg-pass-konfirm" placeholder="••••••••">
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="ubahPassword()">🔐 Ubah Password</button>
+        </div>
+      </div>
+    </div>
+
+
 </div>
 
 <!-- Modal Tambah/Edit Toko -->
@@ -363,14 +406,74 @@ function showNotif(msg,color){
   var t=g('toast');t.textContent=msg;t.style.background=color||'#1E1B2E';
   t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
 }
+var POS_BASE_URL = 'https://miesapi.github.io/miesapi/'; // Ganti dengan URL GitHub Pages kamu
+
+function copyPosLink(tokoId) {
+  var url = POS_BASE_URL + 'warungku-pos.html?r=' + tokoId;
+  navigator.clipboard.writeText(url).then(function(){
+    showNotif('✅ Link POS disalin: ' + url, '#00B894');
+  }).catch(function(){
+    prompt('Copy link ini:', url);
+  });
+}
+
+function kirimLinkWA(tokoId, tokoHp) {
+  if (!tokoHp) return;
+  var url = POS_BASE_URL + 'warungku-pos.html?r=' + tokoId;
+  var hp = tokoHp.replace(/[^0-9]/g,'');
+  if (hp.startsWith('0')) hp = '62' + hp.slice(1);
+  var nl = String.fromCharCode(10);
+  var msg = '🍜 *WarungKu POS — Link Aktivasi*' + nl + nl +
+    'Halo! Berikut link untuk mengakses sistem POS toko Anda:' + nl + nl +
+    '▶ ' + url + nl + nl +
+    'Buka link di browser HP/laptop, sistem langsung siap digunakan.' + nl +
+    'Simpan link ini untuk akses berikutnya.';
+  window.open('https://wa.me/' + hp + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
 function doAdminLogin(){
+  loadAdminCFG();
   var pass=g('admin-pass').value;
-  if(pass!==ADMIN_PASS){g('login-err').textContent='Password salah';g('login-err').style.display='block';return;}
+  if(pass!==(_adminCFG.adminPass||ADMIN_PASS)){g('login-err').textContent='Password salah';g('login-err').style.display='block';return;}
   _sb=window.supabase.createClient(SB_URL,SB_KEY);
   g('login-screen').style.display='none';g('app').style.display='flex';
   loadAll();
 }
 function doLogout(){g('login-screen').style.display='flex';g('app').style.display='none';g('admin-pass').value='';}
+var _adminCFG = {};
+function loadAdminCFG(){
+  try{ _adminCFG=JSON.parse(localStorage.getItem("wkadmin_cfg")||"{}"); }catch(e){ _adminCFG={}; }
+  POS_BASE_URL = _adminCFG.posBaseUrl || POS_BASE_URL;
+}
+function saveAdminCFG(){
+  try{ localStorage.setItem("wkadmin_cfg", JSON.stringify(_adminCFG)); }catch(e){}
+}
+function savePengaturanAdmin(){
+  var url = (g("cfg-pos-base-url")||{value:""}).value.trim();
+  if(url && !url.endsWith("/")) url += "/";
+  _adminCFG.posBaseUrl = url;
+  POS_BASE_URL = url || POS_BASE_URL;
+  saveAdminCFG();
+  showNotif("✅ Pengaturan disimpan","#00B894");
+  updatePreviewLink();
+}
+function updatePreviewLink(){
+  var el = g("preview-pos-link"); if(!el) return;
+  el.textContent = (POS_BASE_URL||"-") + "warungku-pos.html?r=RESTAURANT_ID";
+}
+function ubahPassword(){
+  var lama=(g("cfg-pass-lama")||{value:""}).value;
+  var baru=(g("cfg-pass-baru")||{value:""}).value;
+  var konfirm=(g("cfg-pass-konfirm")||{value:""}).value;
+  if(lama !== (_adminCFG.adminPass||ADMIN_PASS)){ showNotif("Password lama salah","#EF4444"); return; }
+  if(!baru||baru.length<6){ showNotif("Password baru minimal 6 karakter","#EF4444"); return; }
+  if(baru!==konfirm){ showNotif("Konfirmasi tidak cocok","#EF4444"); return; }
+  _adminCFG.adminPass = baru;
+  saveAdminCFG();
+  showNotif("✅ Password berhasil diubah","#00B894");
+  ["cfg-pass-lama","cfg-pass-baru","cfg-pass-konfirm"].forEach(function(id){ var el=g(id);if(el)el.value=""; });
+}
+
 function nav(p){
   document.querySelectorAll('.sb-item').forEach(function(el){el.classList.toggle('active',el.dataset.p===p);});
   document.querySelectorAll('.page').forEach(function(el){el.classList.remove('active');});
@@ -379,7 +482,21 @@ function nav(p){
   if(p==='langganan')renderSubTable();
   if(p==='paket')renderPaketCards();
   if(p==='dashboard')renderDashboard();
+  if(p==='pengaturan')renderPengaturanPage();
 }
+function renderPengaturanPage(){
+  var urlEl = g("cfg-pos-base-url");
+  if(urlEl) urlEl.value = _adminCFG.posBaseUrl || POS_BASE_URL;
+  updatePreviewLink();
+  // Auto-update preview on type
+  if(urlEl) urlEl.oninput = function(){
+    var u=urlEl.value.trim();
+    if(u&&!u.endsWith("/"))u+="/";
+    var prev=g("preview-pos-link");
+    if(prev) prev.textContent=(u||"-")+"warungku-pos.html?r=RESTAURANT_ID";
+  };
+}
+
 async function loadAll(){
   try{
     var r1=await _sb.from('plans').select('*').order('urutan');
@@ -457,6 +574,8 @@ function renderTokoTable(){
       '<td><div style="display:flex;gap:4px">'+
         '<button class="btn btn-sm" onclick="editToko(this.dataset.id)" data-id="'+tid+'">✏️</button>'+
         '<button class="btn btn-sm btn-primary" onclick="editSub(this.dataset.id)" data-id="'+tid+'">📋 Sub</button>'+
+        '<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="copyPosLink(this.dataset.id)" data-id="'+tid+'" title="Copy link POS">🔗 Link</button>'+
+        '<button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="kirimLinkWA(this.dataset.id, \'' + (t.owner_hp||'') + '\')" data-id="'+tid+'" title="Kirim via WA">💬</button>'+
         '<button class="btn btn-sm" style="color:var(--red-dk)" onclick="hapusToko(this.dataset.id)" data-id="'+tid+'">🗑️</button>'+
       '</div></td></tr>';
   }).join('');
