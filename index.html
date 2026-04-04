@@ -254,6 +254,11 @@ textarea.fi{resize:vertical;min-height:70px}
             <div style="font-weight:700;margin-bottom:4px">Preview link POS:</div>
             <div id="preview-pos-link" style="font-family:monospace;color:var(--accent);word-break:break-all">-</div>
           </div>
+          <div class="form-group" style="margin-top:12px">
+            <label class="form-lbl">No. WhatsApp Admin (untuk dihubungi kasir)</label>
+            <input class="fi" id="cfg-admin-wa" placeholder="6281234567890" type="tel">
+            <div style="font-size:10px;color:var(--txt2);margin-top:4px">Format internasional tanpa + (mis: 6281234567890). Disertakan di pesan aktivasi.</div>
+          </div>
           <button class="btn btn-primary" style="width:100%" onclick="savePengaturanAdmin()">💾 Simpan</button>
         </div>
         <div class="card">
@@ -409,7 +414,7 @@ function showNotif(msg,color){
 var POS_BASE_URL = 'https://miesapi.github.io/miesapi/'; // Ganti dengan URL GitHub Pages kamu
 
 function copyPosLink(tokoId) {
-  var url = POS_BASE_URL + 'warungku-pos.html?r=' + tokoId;
+  var url = POS_BASE_URL + '?r=' + tokoId;
   navigator.clipboard.writeText(url).then(function(){
     showNotif('✅ Link POS disalin: ' + url, '#00B894');
   }).catch(function(){
@@ -418,16 +423,26 @@ function copyPosLink(tokoId) {
 }
 
 function kirimLinkWA(tokoId, tokoHp) {
-  if (!tokoHp) return;
-  var url = POS_BASE_URL + 'warungku-pos.html?r=' + tokoId;
+  if (!tokoHp) { showNotif('No. HP toko tidak ada', '#EF4444'); return; }
+  var toko = _tokoData.find(function(t){ return t.id===tokoId; });
+  var sub = _subData.find(function(s){ return s.restaurant_id===tokoId; });
+  var planNama = sub&&sub.plans ? sub.plans.nama : '-';
+  var selesai = sub&&sub.selesai ? new Date(sub.selesai).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}) : '-';
+  var url = POS_BASE_URL + '?r=' + tokoId;
   var hp = tokoHp.replace(/[^0-9]/g,'');
   if (hp.startsWith('0')) hp = '62' + hp.slice(1);
   var nl = String.fromCharCode(10);
+  var adminWa = _adminCFG.adminWA || '';
   var msg = '🍜 *WarungKu POS — Link Aktivasi*' + nl + nl +
-    'Halo! Berikut link untuk mengakses sistem POS toko Anda:' + nl + nl +
-    '▶ ' + url + nl + nl +
-    'Buka link di browser HP/laptop, sistem langsung siap digunakan.' + nl +
-    'Simpan link ini untuk akses berikutnya.';
+    '📋 *Detail Toko:*' + nl +
+    '• Nama Toko: *' + (toko?toko.nama:'-') + '*' + nl +
+    '• Pemilik: ' + (toko?toko.owner_nama||'-':'-') + nl +
+    '• Paket: *' + planNama + '*' + nl +
+    '• Aktif hingga: ' + selesai + nl + nl +
+    '▶ *Link POS:*' + nl + url + nl + nl +
+    'Buka link ini di browser HP/laptop — sistem langsung siap.' + nl +
+    'Simpan link untuk akses berikutnya.' + nl + nl +
+    (adminWa ? '📞 Bantuan: wa.me/' + adminWa.replace(/[^0-9]/g,'') : '');
   window.open('https://wa.me/' + hp + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
@@ -453,13 +468,15 @@ function savePengaturanAdmin(){
   if(url && !url.endsWith("/")) url += "/";
   _adminCFG.posBaseUrl = url;
   POS_BASE_URL = url || POS_BASE_URL;
+  var wa = (g("cfg-admin-wa")||{value:""}).value.trim().replace(/[^0-9]/g,"");
+  _adminCFG.adminWA = wa;
   saveAdminCFG();
   showNotif("✅ Pengaturan disimpan","#00B894");
   updatePreviewLink();
 }
 function updatePreviewLink(){
   var el = g("preview-pos-link"); if(!el) return;
-  el.textContent = (POS_BASE_URL||"-") + "warungku-pos.html?r=RESTAURANT_ID";
+  el.textContent = (POS_BASE_URL||"-") + "?r=RESTAURANT_ID";
 }
 function ubahPassword(){
   var lama=(g("cfg-pass-lama")||{value:""}).value;
@@ -487,13 +504,15 @@ function nav(p){
 function renderPengaturanPage(){
   var urlEl = g("cfg-pos-base-url");
   if(urlEl) urlEl.value = _adminCFG.posBaseUrl || POS_BASE_URL;
+  var waEl = g("cfg-admin-wa");
+  if(waEl) waEl.value = _adminCFG.adminWA || "";
   updatePreviewLink();
   // Auto-update preview on type
   if(urlEl) urlEl.oninput = function(){
     var u=urlEl.value.trim();
     if(u&&!u.endsWith("/"))u+="/";
     var prev=g("preview-pos-link");
-    if(prev) prev.textContent=(u||"-")+"warungku-pos.html?r=RESTAURANT_ID";
+    if(prev) prev.textContent=(u||"-")+"?r=RESTAURANT_ID";
   };
 }
 
