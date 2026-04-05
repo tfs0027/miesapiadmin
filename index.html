@@ -244,15 +244,24 @@ textarea.fi{resize:vertical;min-height:70px}
         <div class="card">
           <div class="card-hd"><span class="card-title">🔗 URL Aplikasi</span></div>
           <div style="font-size:12px;color:var(--txt2);margin-bottom:12px;line-height:1.7">
-            URL dasar GitHub Pages tempat file-file WarungKu di-hosting. Digunakan untuk generate link POS yang dikirim ke kasir.
+            Isi URL dasar GitHub Pages, lalu tambahkan URL khusus untuk halaman pesanan online dan rekrutmen jika berbeda.
           </div>
           <div class="form-group">
-            <label class="form-lbl">URL GitHub Pages (akhiri dengan /)</label>
+            <label class="form-lbl">📱 URL Halaman POS Kasir (akhiri dengan /)</label>
             <input class="fi" id="cfg-pos-base-url" placeholder="https://username.github.io/namarepository/">
+            <div id="preview-pos-link" style="font-family:monospace;font-size:11px;color:var(--accent);word-break:break-all;margin-top:4px;display:none"></div>
           </div>
-          <div style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--txt2);margin-bottom:12px">
-            <div style="font-weight:700;margin-bottom:4px">Preview link POS:</div>
-            <div id="preview-pos-link" style="font-family:monospace;color:var(--accent);word-break:break-all">-</div>
+          <div class="form-group">
+            <label class="form-lbl">🛵 URL Halaman Pesanan Online</label>
+            <input class="fi" id="cfg-order-url" placeholder="https://username.github.io/namarepository/order/">
+            <div style="font-size:10px;color:var(--txt2);margin-top:4px">URL tanpa nama file — pelanggan mengakses langsung tanpa warungku-order.html</div>
+            <div id="preview-order-link" style="font-family:monospace;font-size:11px;color:#0EA5E9;word-break:break-all;margin-top:4px;display:none"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">📝 URL Formulir Rekrutmen</label>
+            <input class="fi" id="cfg-recruit-url" placeholder="https://username.github.io/namarepository/recruit/">
+            <div style="font-size:10px;color:var(--txt2);margin-top:4px">URL tanpa nama file — pelamar mengakses langsung tanpa warungku-recruit.html</div>
+            <div id="preview-recruit-link" style="font-family:monospace;font-size:11px;color:#10B981;word-break:break-all;margin-top:4px;display:none"></div>
           </div>
           <div class="form-group" style="margin-top:12px">
             <label class="form-lbl">No. WhatsApp Admin (untuk dihubungi kasir)</label>
@@ -477,27 +486,48 @@ function loadAdminCFG(){
 function saveAdminCFG(){
   try{ localStorage.setItem("wkadmin_cfg", JSON.stringify(_adminCFG)); }catch(e){}
 }
-function savePengaturanAdmin(){
+async function savePengaturanAdmin(){
   var url = (g("cfg-pos-base-url")||{value:""}).value.trim();
   if(url && !url.endsWith("/")) url += "/";
-  _adminCFG.posBaseUrl = url;
-  POS_BASE_URL = url || POS_BASE_URL;
+  var orderUrl = (g("cfg-order-url")||{value:""}).value.trim().replace(/\/+$/,"");
+  var recruitUrl = (g("cfg-recruit-url")||{value:""}).value.trim().replace(/\/+$/,"");
   var wa = (g("cfg-admin-wa")||{value:""}).value.trim().replace(/[^0-9]/g,"");
+  _adminCFG.posBaseUrl = url;
+  _adminCFG.orderUrl = orderUrl;
+  _adminCFG.recruitUrl = recruitUrl;
   _adminCFG.adminWA = wa;
+  POS_BASE_URL = url || POS_BASE_URL;
   saveAdminCFG();
-  // Save admin WA to Supabase system_config so register page can read it
-  if (_sb && wa) {
-    _sb.from('system_config').upsert({key:'admin_wa', value:wa},{onConflict:'key'})
-      .then(function(){ showNotif("✅ Pengaturan disimpan & tersync","#00B894"); })
-      .catch(function(){ showNotif("✅ Tersimpan lokal (sync Supabase gagal)","#F59E0B"); });
-  } else {
-    showNotif("✅ Pengaturan disimpan","#00B894");
-  }
   updatePreviewLink();
+  // Sync to Supabase system_config
+  if (_sb) {
+    var configs = [];
+    if (wa) configs.push({key:"admin_wa", value:wa});
+    if (orderUrl) configs.push({key:"order_url", value:orderUrl});
+    if (recruitUrl) configs.push({key:"recruit_url", value:recruitUrl});
+    if (url) configs.push({key:"pos_base_url", value:url});
+    if (configs.length) {
+      try {
+        for (var i=0; i<configs.length; i++) {
+          await _sb.from("system_config").upsert(configs[i], {onConflict:"key"});
+        }
+        showNotif("✅ Pengaturan tersimpan & tersync ke Supabase","#00B894");
+      } catch(e) { showNotif("✅ Tersimpan lokal (sync gagal: "+e.message+")","#F59E0B"); }
+    } else { showNotif("✅ Pengaturan disimpan","#00B894"); }
+  } else { showNotif("✅ Pengaturan disimpan (Supabase belum terhubung)","#00B894"); }
 }
 function updatePreviewLink(){
-  var el = g("preview-pos-link"); if(!el) return;
-  el.textContent = (POS_BASE_URL||"-") + "?r=RESTAURANT_ID";
+  var base = POS_BASE_URL || "";
+  var orderUrl = _adminCFG.orderUrl || "";
+  var recruitUrl = _adminCFG.recruitUrl || "";
+  function showPrev(id, url) {
+    var el = g(id); if(!el) return;
+    if(url){ el.textContent = url + "?r=RESTAURANT_ID"; el.style.display="block"; }
+    else el.style.display="none";
+  }
+  showPrev("preview-pos-link", base);
+  showPrev("preview-order-link", orderUrl);
+  showPrev("preview-recruit-link", recruitUrl);
 }
 async function ubahPassword(){
   var lama=(g("cfg-pass-lama")||{value:""}).value;
@@ -530,16 +560,28 @@ function nav(p){
 function renderPengaturanPage(){
   var urlEl = g("cfg-pos-base-url");
   if(urlEl) urlEl.value = _adminCFG.posBaseUrl || POS_BASE_URL;
+  var oEl = g("cfg-order-url");
+  if(oEl) oEl.value = _adminCFG.orderUrl || "";
+  var rEl2 = g("cfg-recruit-url");
+  if(rEl2) rEl2.value = _adminCFG.recruitUrl || "";
   var waEl = g("cfg-admin-wa");
   if(waEl) waEl.value = _adminCFG.adminWA || "";
   updatePreviewLink();
-  // Auto-update preview on type
-  if(urlEl) urlEl.oninput = function(){
-    var u=urlEl.value.trim();
-    if(u&&!u.endsWith("/"))u+="/";
-    var prev=g("preview-pos-link");
-    if(prev) prev.textContent=(u||"-")+"?r=RESTAURANT_ID";
-  };
+  function mkLive(inputId, prevId, isBase) {
+    var inp = g(inputId); if(!inp) return;
+    inp.oninput = function(){
+      var u = inp.value.trim();
+      if(isBase && u && !u.endsWith("/")) u += "/";
+      var prev = g(prevId);
+      if(prev){ if(u){prev.textContent=u+"?r=RESTAURANT_ID";prev.style.display="block";}else prev.style.display="none"; }
+      if(isBase){ POS_BASE_URL=u; _adminCFG.posBaseUrl=u; }
+      else if(inputId==="cfg-order-url") _adminCFG.orderUrl=u;
+      else _adminCFG.recruitUrl=u;
+    };
+  }
+  mkLive("cfg-pos-base-url","preview-pos-link",true);
+  mkLive("cfg-order-url","preview-order-link",false);
+  mkLive("cfg-recruit-url","preview-recruit-link",false);
 }
 
 async function loadAll(){
