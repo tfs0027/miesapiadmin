@@ -631,6 +631,34 @@ function setTokoFilter(f,btn){
   document.querySelectorAll('[id^="ft-"]').forEach(function(b){b.classList.remove('active');});
   if(btn)btn.classList.add('active');renderTokoTable();
 }
+async function forceLogoutToko(tokoId, tokoNama) {
+  var alasan = prompt(
+    "⚡ Force Logout: " + (tokoNama||tokoId) + "\n\n" +
+    "Kasir akan di-logout otomatis saat tutup shift berikutnya.\n" +
+    "Isi alasan (wajib):"
+  );
+  if (!alasan || !alasan.trim()) { showNotif("Alasan wajib diisi", "#EF4444"); return; }
+  try {
+    await _sb.from("restaurants").update({
+      force_logout: true,
+      logout_reason: alasan.trim()
+    }).eq("id", tokoId);
+    showNotif("✅ Signal logout dikirim ke toko — berlaku saat kasir tutup shift", "#7C3AED");
+    loadAll();
+  } catch(e) { showNotif("Gagal: " + e.message, "#EF4444"); }
+}
+
+async function cancelForceLogout(tokoId) {
+  try {
+    await _sb.from("restaurants").update({
+      force_logout: false,
+      logout_reason: null
+    }).eq("id", tokoId);
+    showNotif("✅ Signal logout dibatalkan", "#00B894");
+    loadAll();
+  } catch(e) { showNotif("Gagal: " + e.message, "#EF4444"); }
+}
+
 function renderTokoTable(){
   var now=new Date();
   var data=_tokoData.filter(function(t){
@@ -655,7 +683,11 @@ function renderTokoTable(){
       suspended:'<span class="badge badge-gray">🚫 Suspend</span>',none:'<span class="badge badge-gray">—</span>'};
     var tid=t.id;
     return '<tr>'+
-      '<td><div style="font-weight:700">'+(t.logo||'🏪')+' '+t.nama+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.alamat||'-')+'</div></td>'+
+      '<td>' +
+          '<div style="font-weight:700;display:flex;align-items:center;gap:6px">'+(t.logo||'🏪')+' '+t.nama+
+          (t.force_logout ? ' <span onclick="cancelForceLogout(\'' + t.id + '\')" style="background:#7C3AED;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;cursor:pointer" title="' + (t.logout_reason||'') + '">⚡ Pending ✕</span>' : '') +
+          '</div><div style="font-size:11px;color:var(--txt2)">'+(t.alamat||'-')+'</div>' +
+          '</td>'+
       '<td><div>'+(t.owner_nama||'-')+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.owner_hp||'-')+'</div></td>'+
       '<td>'+planNama+'</td>'+(sb2[ss]||ss)+'<td>'+selesai+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari</div>':'')+'</td>'+
       '<td><div style="display:flex;gap:4px">'+
@@ -664,6 +696,7 @@ function renderTokoTable(){
         '<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="copyPosLink(this.dataset.id)" data-id="'+tid+'" title="Copy link POS">🔗 Link</button>'+
         '<button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="kirimLinkWA(this.dataset.id, \'' + (t.owner_hp||'') + '\')" data-id="'+tid+'" title="Kirim via WA">💬</button>'+
         '<button class="btn btn-sm" style="color:var(--red-dk)" onclick="hapusToko(this.dataset.id)" data-id="'+tid+'">🗑️</button>'+
+        '<button class="btn btn-sm" style="color:#7C3AED;border-color:#7C3AED" onclick="forceLogoutToko(this.dataset.id,this.dataset.nama)" data-id="'+tid+'" data-nama="'+t.nama+'" title="Paksa logout kasir saat tutup shift">⚡ Logout</button>'+
       '</div></td></tr>';
   }).join('');
 }
