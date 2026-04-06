@@ -100,6 +100,18 @@ textarea.fi{resize:vertical;min-height:70px}
 /* Login */
 #login-screen{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--sidebar)}
 .login-box{background:#fff;border-radius:20px;padding:36px;width:360px;text-align:center}
+.login-panel{display:none}.login-panel.active{display:block}
+.otp-boxes{display:flex;gap:8px;justify-content:center;margin:16px 0}
+.otp-box{width:44px;height:52px;border:1.5px solid var(--brd2);border-radius:10px;font-size:22px;font-weight:800;text-align:center;font-family:var(--font);color:var(--txt);background:var(--bg);outline:none;transition:border-color .2s}
+.otp-box:focus{border-color:var(--accent)}
+.otp-timer{font-size:12px;color:var(--txt2);margin-bottom:12px}
+.otp-timer span{font-weight:700;color:var(--accent)}
+.back-link{font-size:12px;color:var(--txt2);cursor:pointer;margin-top:12px;display:inline-block}
+.back-link:hover{color:var(--accent)}
+.step-indicator{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:20px}
+.step-dot{width:8px;height:8px;border-radius:50%;background:var(--brd);transition:background .2s}
+.step-dot.active{background:var(--accent)}
+.step-dot.done{background:var(--green)}
 .login-icon{font-size:48px;margin-bottom:12px}
 .login-title{font-size:20px;font-weight:800;margin-bottom:4px}
 .login-sub{font-size:13px;color:var(--txt2);margin-bottom:24px}
@@ -129,15 +141,87 @@ textarea.fi{resize:vertical;min-height:70px}
 <!-- Login Screen -->
 <div id="login-screen">
   <div class="login-box">
-    <div class="login-icon">🛡️</div>
-    <div class="login-title">WarungKu Admin</div>
-    <div class="login-sub">Super Admin Panel</div>
-    <div class="form-group" style="text-align:left">
-      <label class="form-lbl">Password Admin</label>
-      <input class="fi" type="password" id="admin-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doAdminLogin()">
+
+    <!-- PANEL 1: Login utama -->
+    <div class="login-panel active" id="panel-login">
+      <div class="login-icon">🛡️</div>
+      <div class="login-title">WarungKu Admin</div>
+      <div class="login-sub">Super Admin Panel</div>
+      <div class="form-group" style="text-align:left">
+        <label class="form-lbl">Password Admin</label>
+        <input class="fi" type="password" id="admin-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doAdminLogin()">
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="doAdminLogin()">🔐 Masuk</button>
+      <div id="login-err" style="color:var(--red-dk);font-size:12px;margin-top:10px;display:none"></div>
+      <div style="margin-top:14px">
+        <span class="back-link" onclick="showForgotPanel()">🔑 Lupa password?</span>
+      </div>
     </div>
-    <button class="btn btn-primary" style="width:100%" onclick="doAdminLogin()">🔐 Masuk</button>
-    <div id="login-err" style="color:var(--red-dk);font-size:12px;margin-top:10px;display:none"></div>
+
+    <!-- PANEL 2: Kirim OTP ke WA -->
+    <div class="login-panel" id="panel-forgot">
+      <div class="step-indicator">
+        <div class="step-dot active" id="sdot-1"></div>
+        <div class="step-dot" id="sdot-2"></div>
+        <div class="step-dot" id="sdot-3"></div>
+      </div>
+      <div class="login-icon" style="font-size:36px">📱</div>
+      <div class="login-title" style="font-size:17px">Reset Password</div>
+      <div class="login-sub" id="forgot-wa-hint">OTP akan dikirim ke WhatsApp admin yang terdaftar.</div>
+      <div id="forgot-err" style="color:var(--red-dk);font-size:12px;margin-bottom:10px;display:none"></div>
+      <button class="btn btn-primary" style="width:100%" id="btn-send-otp" onclick="sendOTP()">💬 Kirim OTP via WhatsApp</button>
+      <div><span class="back-link" onclick="showLoginPanel()">← Kembali ke login</span></div>
+    </div>
+
+    <!-- PANEL 3: Verifikasi OTP -->
+    <div class="login-panel" id="panel-otp">
+      <div class="step-indicator">
+        <div class="step-dot done" id="sdot2-1"></div>
+        <div class="step-dot active" id="sdot2-2"></div>
+        <div class="step-dot" id="sdot2-3"></div>
+      </div>
+      <div class="login-icon" style="font-size:36px">🔢</div>
+      <div class="login-title" style="font-size:17px">Masukkan OTP</div>
+      <div class="login-sub">Cek WhatsApp admin, masukkan 6 digit kode OTP.</div>
+      <div class="otp-boxes">
+        <input class="otp-box" id="otp0" maxlength="1" type="tel" oninput="otpInput(this,0)" onkeydown="otpKey(event,0)">
+        <input class="otp-box" id="otp1" maxlength="1" type="tel" oninput="otpInput(this,1)" onkeydown="otpKey(event,1)">
+        <input class="otp-box" id="otp2" maxlength="1" type="tel" oninput="otpInput(this,2)" onkeydown="otpKey(event,2)">
+        <input class="otp-box" id="otp3" maxlength="1" type="tel" oninput="otpInput(this,3)" onkeydown="otpKey(event,3)">
+        <input class="otp-box" id="otp4" maxlength="1" type="tel" oninput="otpInput(this,4)" onkeydown="otpKey(event,4)">
+        <input class="otp-box" id="otp5" maxlength="1" type="tel" oninput="otpInput(this,5)" onkeydown="otpKey(event,5)">
+      </div>
+      <div class="otp-timer" id="otp-timer">Berlaku <span id="otp-countdown">10:00</span></div>
+      <div id="otp-err" style="color:var(--red-dk);font-size:12px;margin-bottom:10px;display:none"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="verifyOTP()">✅ Verifikasi OTP</button>
+      <div style="margin-top:8px;display:flex;justify-content:space-between">
+        <span class="back-link" onclick="showForgotPanel()">← Kirim ulang</span>
+        <span class="back-link" onclick="showLoginPanel()">Batal</span>
+      </div>
+    </div>
+
+    <!-- PANEL 4: Set Password Baru -->
+    <div class="login-panel" id="panel-newpass">
+      <div class="step-indicator">
+        <div class="step-dot done"></div>
+        <div class="step-dot done"></div>
+        <div class="step-dot active"></div>
+      </div>
+      <div class="login-icon" style="font-size:36px">🔐</div>
+      <div class="login-title" style="font-size:17px">Password Baru</div>
+      <div class="login-sub">OTP terverifikasi! Set password baru kamu.</div>
+      <div class="form-group" style="text-align:left;margin-bottom:10px">
+        <label class="form-lbl">Password Baru</label>
+        <input class="fi" type="password" id="new-pass1" placeholder="Minimal 6 karakter">
+      </div>
+      <div class="form-group" style="text-align:left">
+        <label class="form-lbl">Konfirmasi Password</label>
+        <input class="fi" type="password" id="new-pass2" placeholder="Ulangi password baru" onkeydown="if(event.key==='Enter')saveNewPassword()">
+      </div>
+      <div id="newpass-err" style="color:var(--red-dk);font-size:12px;margin-bottom:10px;display:none"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="saveNewPassword()">💾 Simpan Password Baru</button>
+    </div>
+
   </div>
 </div>
 
@@ -882,6 +966,211 @@ async function hapusPaket(planId){
   catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
 
+
+// ═══════════════════════════════════════════════
+// FORGOT PASSWORD — WA OTP FLOW
+// ═══════════════════════════════════════════════
+var _otpCode = null;
+var _otpExpiry = null;
+var _otpTimer = null;
+
+function showLoginPanel() {
+  clearOtpTimer();
+  document.querySelectorAll('.login-panel').forEach(function(p){ p.classList.remove('active'); });
+  g('panel-login').classList.add('active');
+  g('admin-pass').value = '';
+  var err = g('login-err'); if (err) err.style.display = 'none';
+}
+
+function showForgotPanel() {
+  clearOtpTimer();
+  document.querySelectorAll('.login-panel').forEach(function(p){ p.classList.remove('active'); });
+  g('panel-forgot').classList.add('active');
+  // Load & preview WA number from Supabase
+  var hint = g('forgot-wa-hint');
+  var btnSend = g('btn-send-otp');
+  if (hint) hint.textContent = 'Memuat info admin...';
+  if (btnSend) { btnSend.disabled = true; btnSend.textContent = '⏳ Memuat...'; }
+  // Init Supabase sementara untuk ambil admin_wa
+  try {
+    var sbTemp = window.supabase.createClient(SB_URL, SB_KEY);
+    sbTemp.from('system_config').select('value').eq('key','admin_wa').single().then(function(res) {
+      if (res.data && res.data.value) {
+        var wa = res.data.value.replace(/[^0-9]/g,'');
+        var masked = wa.length > 6 ? wa.substr(0,3) + '****' + wa.slice(-3) : '(tidak diset)';
+        if (hint) hint.textContent = 'OTP akan dikirim ke WhatsApp admin: ' + masked;
+        if (btnSend) { btnSend.disabled = false; btnSend.textContent = '💬 Kirim OTP via WhatsApp'; }
+        window._otpWA = wa;
+      } else {
+        if (hint) hint.innerHTML = '<span style="color:var(--red-dk)">⚠️ No. WA admin belum diset di Pengaturan.</span>';
+        if (btnSend) btnSend.disabled = true;
+        window._otpWA = null;
+      }
+    }).catch(function() {
+      // Fallback ke localStorage
+      loadAdminCFG();
+      var wa = _adminCFG.adminWA || '';
+      if (wa) {
+        var masked = wa.length > 6 ? wa.substr(0,3) + '****' + wa.slice(-3) : '(tidak diset)';
+        if (hint) hint.textContent = 'OTP akan dikirim ke WhatsApp admin: ' + masked;
+        if (btnSend) { btnSend.disabled = false; btnSend.textContent = '💬 Kirim OTP via WhatsApp'; }
+        window._otpWA = wa;
+      } else {
+        if (hint) hint.innerHTML = '<span style="color:var(--red-dk)">⚠️ No. WA admin belum diset.</span>';
+        if (btnSend) btnSend.disabled = true;
+        window._otpWA = null;
+      }
+    });
+  } catch(e) {
+    if (hint) hint.textContent = 'Gagal memuat data.';
+    if (btnSend) btnSend.disabled = false;
+  }
+}
+
+function generateOTP() {
+  // 6 digit random, tidak dimulai dari 0
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function sendOTP() {
+  var wa = window._otpWA;
+  if (!wa) { showNotifLogin('No. WA admin belum diset!'); return; }
+  _otpCode = generateOTP();
+  _otpExpiry = Date.now() + 10 * 60 * 1000; // 10 menit
+  var nl = String.fromCharCode(10);
+  var msg = '🛡️ *WarungKu Admin — Kode OTP Reset Password*' + nl + nl +
+    'Kode OTP kamu:' + nl +
+    '*' + _otpCode + '*' + nl + nl +
+    '⏱️ Berlaku 10 menit.' + nl +
+    'Jangan berikan kode ini ke siapapun.';
+  window.open('https://wa.me/' + wa + '?text=' + encodeURIComponent(msg), '_blank');
+  // Pindah ke panel OTP
+  document.querySelectorAll('.login-panel').forEach(function(p){ p.classList.remove('active'); });
+  g('panel-otp').classList.add('active');
+  // Reset & fokus OTP boxes
+  for (var i = 0; i < 6; i++) { var el = g('otp'+i); if(el){ el.value=''; el.style.borderColor=''; } }
+  setTimeout(function(){ var el=g('otp0'); if(el) el.focus(); }, 100);
+  // Mulai countdown
+  startOtpCountdown();
+}
+
+function startOtpCountdown() {
+  clearOtpTimer();
+  _otpTimer = setInterval(function() {
+    var rem = _otpExpiry - Date.now();
+    if (rem <= 0) {
+      clearOtpTimer();
+      var cd = g('otp-countdown'); if(cd) cd.textContent = '00:00';
+      var timer = g('otp-timer'); if(timer) timer.style.color = 'var(--red-dk)';
+      _otpCode = null; // invalidate
+      return;
+    }
+    var m = Math.floor(rem / 60000);
+    var s = Math.floor((rem % 60000) / 1000);
+    var cd = g('otp-countdown');
+    if (cd) cd.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    var timer = g('otp-timer'); if (timer) timer.style.color = rem < 60000 ? 'var(--red-dk)' : '';
+  }, 1000);
+}
+
+function clearOtpTimer() {
+  if (_otpTimer) { clearInterval(_otpTimer); _otpTimer = null; }
+}
+
+function otpInput(el, idx) {
+  // Hanya angka
+  el.value = el.value.replace(/[^0-9]/g, '').slice(-1);
+  if (el.value && idx < 5) {
+    var next = g('otp' + (idx+1));
+    if (next) next.focus();
+  }
+  // Auto-verify jika semua terisi
+  var full = true;
+  for (var i = 0; i < 6; i++) { var box = g('otp'+i); if (!box || !box.value) { full=false; break; } }
+  if (full) setTimeout(verifyOTP, 200);
+}
+
+function otpKey(e, idx) {
+  if (e.key === 'Backspace') {
+    var cur = g('otp'+idx);
+    if (cur && !cur.value && idx > 0) {
+      var prev = g('otp'+(idx-1));
+      if (prev) { prev.value=''; prev.focus(); }
+    }
+  }
+  if (e.key === 'ArrowLeft' && idx > 0) { var p=g('otp'+(idx-1)); if(p)p.focus(); }
+  if (e.key === 'ArrowRight' && idx < 5) { var n=g('otp'+(idx+1)); if(n)n.focus(); }
+}
+
+function verifyOTP() {
+  var entered = '';
+  for (var i = 0; i < 6; i++) { var el = g('otp'+i); entered += el ? (el.value||'') : ''; }
+  var errEl = g('otp-err');
+  if (entered.length < 6) {
+    if (errEl) { errEl.textContent = 'Masukkan semua 6 digit OTP.'; errEl.style.display='block'; }
+    return;
+  }
+  if (!_otpCode || Date.now() > _otpExpiry) {
+    if (errEl) { errEl.textContent = 'OTP sudah expired. Klik "Kirim ulang".'; errEl.style.display='block'; }
+    // Shake animation
+    for (var j=0;j<6;j++){var b=g('otp'+j);if(b)b.style.borderColor='var(--red)';}
+    return;
+  }
+  if (entered !== _otpCode) {
+    if (errEl) { errEl.textContent = 'Kode OTP salah. Coba lagi.'; errEl.style.display='block'; }
+    for (var k=0;k<6;k++){var bx=g('otp'+k);if(bx){bx.style.borderColor='var(--red)';bx.value='';}}
+    setTimeout(function(){ var el=g('otp0'); if(el)el.focus(); }, 100);
+    return;
+  }
+  // OTP valid!
+  clearOtpTimer();
+  _otpCode = null; // invalidasi setelah dipakai
+  if (errEl) errEl.style.display = 'none';
+  document.querySelectorAll('.login-panel').forEach(function(p){ p.classList.remove('active'); });
+  g('panel-newpass').classList.add('active');
+  setTimeout(function(){ var el=g('new-pass1'); if(el) el.focus(); }, 100);
+}
+
+async function saveNewPassword() {
+  var p1 = g('new-pass1').value;
+  var p2 = g('new-pass2').value;
+  var errEl = g('newpass-err');
+  if (!p1 || p1.length < 6) {
+    errEl.textContent = 'Password minimal 6 karakter.'; errEl.style.display='block'; return;
+  }
+  if (p1 !== p2) {
+    errEl.textContent = 'Konfirmasi password tidak cocok.'; errEl.style.display='block'; return;
+  }
+  errEl.style.display = 'none';
+  var hash = await hashPassword(p1);
+  // Simpan ke localStorage
+  loadAdminCFG();
+  _adminCFG.adminPassHash = hash;
+  saveAdminCFG();
+  // Sync ke Supabase system_config jika bisa
+  try {
+    var sbTemp2 = window.supabase.createClient(SB_URL, SB_KEY);
+    await sbTemp2.from('system_config').upsert({key:'admin_pass_hash', value: hash}, {onConflict:'key'});
+  } catch(e) { console.warn('Sync hash gagal:', e.message); }
+  // Berhasil — langsung login
+  g('new-pass1').value = '';
+  g('new-pass2').value = '';
+  showLoginPanel();
+  // Tampilkan pesan sukses di login
+  var err = g('login-err');
+  if (err) {
+    err.textContent = '✅ Password berhasil diubah! Silakan login.';
+    err.style.color = 'var(--green)';
+    err.style.display = 'block';
+    setTimeout(function(){ err.style.display='none'; err.style.color=''; }, 4000);
+  }
+  showNotif('✅ Password berhasil diubah!', '#00B894');
+}
+
+function showNotifLogin(msg) {
+  var err = g('forgot-err');
+  if (err) { err.textContent = msg; err.style.display = 'block'; }
+}
 </script>
 </body>
 </html>
