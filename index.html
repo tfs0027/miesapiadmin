@@ -271,6 +271,35 @@ textarea.fi{resize:vertical;min-height:70px}
           <button class="btn btn-primary" style="width:100%" onclick="savePengaturanAdmin()">💾 Simpan</button>
         </div>
         <div class="card">
+          <div class="card-hd"><span class="card-title">💳 Info Pembayaran Pendaftaran</span></div>
+          <div style="font-size:12px;color:var(--txt2);margin-bottom:14px">
+            Info rekening bank dan QRIS yang ditampilkan ke calon toko di halaman registrasi.
+          </div>
+
+          <div style="font-weight:700;font-size:12px;color:var(--txt2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">🏦 Rekening Bank</div>
+          <div id="bank-payment-rows"></div>
+          <button class="btn btn-sm" onclick="tambahBankPayment()" style="margin-bottom:16px">+ Tambah Rekening</button>
+
+          <div style="font-weight:700;font-size:12px;color:var(--txt2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">📲 QRIS</div>
+          <div class="form-group">
+            <label class="form-lbl">Nama QRIS</label>
+            <input class="fi" id="cfg-pay-qris-nama" placeholder="WarungKu Indonesia">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Upload Gambar QRIS</label>
+            <input type="file" id="cfg-pay-qris-file" accept="image/*" style="display:none" onchange="previewPayQris(this)">
+            <label for="cfg-pay-qris-file" style="display:block;padding:10px 14px;border:2px dashed var(--brd);border-radius:var(--radius);cursor:pointer;text-align:center;font-size:12px;color:var(--txt2)">
+              📁 Klik untuk upload gambar QRIS
+            </label>
+            <div id="pay-qris-preview" style="margin-top:8px;display:none">
+              <img id="pay-qris-img" style="max-width:180px;border-radius:8px;border:1px solid var(--brd)" src="">
+              <button class="btn btn-sm" style="color:var(--red-dk);display:block;margin-top:4px" onclick="hapusPayQris()">🗑️ Hapus</button>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="savePaymentInfo()">💾 Simpan Info Pembayaran</button>
+        </div>
+
+        <div class="card">
           <div class="card-hd"><span class="card-title">🔐 Password Admin</span></div>
           <div style="font-size:12px;color:var(--txt2);margin-bottom:12px">Ubah password login super admin.</div>
           <div class="form-group">
@@ -600,7 +629,142 @@ function renderPengaturanPage(){
   mkLive("cfg-pos-base-url","preview-pos-link",true);
   mkLive("cfg-order-url","preview-order-link",false);
   mkLive("cfg-recruit-url","preview-recruit-link",false);
+  // Load payment info
+  loadPaymentInfo();
 }
+
+
+// ══ INFO PEMBAYARAN PENDAFTARAN ═══════════════════════════════════════════
+var _payBanks = []; // [{nama, norek, atas_nama}]
+var _payQrisImg = null; // base64
+var _payQrisNama = '';
+
+function renderBankPaymentRows() {
+  var el = document.getElementById('bank-payment-rows'); if (!el) return;
+  if (!_payBanks.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--txt3);margin-bottom:8px">Belum ada rekening. Klik "+ Tambah Rekening".</div>';
+    return;
+  }
+  el.innerHTML = _payBanks.map(function(b, i) {
+    return '<div style="display:flex;gap:8px;align-items:start;margin-bottom:10px;padding:10px;background:var(--bg);border:1px solid var(--brd);border-radius:var(--radius)">' +
+      '<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
+        '<input class="fi pay-bank-nama" placeholder="Nama Bank (BCA, BRI...)" value="'+(b.nama||'')+'" style="font-size:12px">' +
+        '<input class="fi pay-bank-norek" placeholder="No. Rekening" value="'+(b.norek||'')+'" style="font-size:12px">' +
+        '<input class="fi pay-bank-an" placeholder="Atas Nama" value="'+(b.an||'')+'" style="font-size:12px;grid-column:1/-1">' +
+      '</div>' +
+      '<button class="btn btn-sm" style="color:var(--red-dk);flex-shrink:0;margin-top:2px" onclick="hapusBankPayment('+i+')">🗑️</button>' +
+    '</div>';
+  }).join('');
+}
+
+function tambahBankPayment() {
+  _payBanks.push({nama:'', norek:'', an:''});
+  renderBankPaymentRows();
+  // Focus nama field baru
+  var rows = document.querySelectorAll('#bank-payment-rows .pay-bank-nama');
+  if (rows.length) rows[rows.length-1].focus();
+}
+
+function hapusBankPayment(i) {
+  _payBanks.splice(i, 1);
+  renderBankPaymentRows();
+}
+
+function previewPayQris(input) {
+  var file = input.files && input.files[0]; if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    _payQrisImg = e.target.result;
+    var prev = document.getElementById('pay-qris-preview');
+    var img = document.getElementById('pay-qris-img');
+    if (prev) prev.style.display = 'block';
+    if (img) img.src = _payQrisImg;
+  };
+  reader.readAsDataURL(file);
+}
+
+function hapusPayQris() {
+  _payQrisImg = null;
+  var prev = document.getElementById('pay-qris-preview');
+  if (prev) prev.style.display = 'none';
+  var fi = document.getElementById('cfg-pay-qris-file');
+  if (fi) fi.value = '';
+}
+
+async function savePaymentInfo() {
+  // Kumpulkan data bank dari DOM
+  var rows = document.querySelectorAll('#bank-payment-rows > div');
+  _payBanks = Array.from(rows).map(function(row) {
+    return {
+      nama: (row.querySelector('.pay-bank-nama')||{value:''}).value.trim(),
+      norek: (row.querySelector('.pay-bank-norek')||{value:''}).value.trim(),
+      an: (row.querySelector('.pay-bank-an')||{value:''}).value.trim()
+    };
+  }).filter(function(b){ return b.nama || b.norek; });
+
+  var qrisNamaEl = document.getElementById('cfg-pay-qris-nama');
+  _payQrisNama = qrisNamaEl ? qrisNamaEl.value.trim() : '';
+
+  // Simpan ke localStorage
+  _adminCFG.payBanks = _payBanks;
+  _adminCFG.payQrisImg = _payQrisImg;
+  _adminCFG.payQrisNama = _payQrisNama;
+  saveAdminCFG();
+
+  // Sync ke Supabase system_config
+  if (_sb) {
+    try {
+      var configs = [
+        {key: 'payment_banks', value: JSON.stringify(_payBanks)},
+        {key: 'payment_qris_nama', value: _payQrisNama || ''},
+      ];
+      if (_payQrisImg) configs.push({key: 'payment_qris_img', value: _payQrisImg});
+      for (var i = 0; i < configs.length; i++) {
+        await _sb.from('system_config').upsert(configs[i], {onConflict: 'key'});
+      }
+      showNotif('✅ Info pembayaran tersimpan & tersync ke Supabase', '#00B894');
+    } catch(e) {
+      showNotif('Tersimpan lokal · Sync gagal: ' + e.message, '#F59E0B');
+    }
+  } else {
+    showNotif('✅ Info pembayaran disimpan (lokal)', '#00B894');
+  }
+}
+
+async function loadPaymentInfo() {
+  // Load dari localStorage dulu
+  if (_adminCFG.payBanks) _payBanks = _adminCFG.payBanks;
+  if (_adminCFG.payQrisImg) _payQrisImg = _adminCFG.payQrisImg;
+  if (_adminCFG.payQrisNama) _payQrisNama = _adminCFG.payQrisNama;
+
+  // Load dari Supabase (prioritas)
+  if (_sb) {
+    try {
+      var res = await _sb.from('system_config')
+        .select('key,value')
+        .in('key', ['payment_banks','payment_qris_img','payment_qris_nama']);
+      if (!res.error && res.data) {
+        res.data.forEach(function(r) {
+          if (r.key === 'payment_banks') {
+            try { _payBanks = JSON.parse(r.value)||[]; } catch(e){}
+          }
+          if (r.key === 'payment_qris_img') _payQrisImg = r.value || null;
+          if (r.key === 'payment_qris_nama') _payQrisNama = r.value || '';
+        });
+      }
+    } catch(e) { console.warn('loadPaymentInfo:', e.message); }
+  }
+  renderBankPaymentRows();
+  var qn = document.getElementById('cfg-pay-qris-nama');
+  if (qn) qn.value = _payQrisNama;
+  if (_payQrisImg) {
+    var prev = document.getElementById('pay-qris-preview');
+    var img = document.getElementById('pay-qris-img');
+    if (prev) prev.style.display = 'block';
+    if (img) img.src = _payQrisImg;
+  }
+}
+// ═════════════════════════════════════════════════════════════════════════
 
 async function loadAll(){
   try{
