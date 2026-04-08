@@ -169,7 +169,10 @@ textarea.fi{resize:vertical;min-height:70px}
     <div class="page active" id="page-dashboard">
       <div class="topbar">
         <div><div class="page-title">📊 Dashboard</div><div class="page-sub">Ringkasan sistem WarungKu</div></div>
-        <button class="btn btn-sm" onclick="loadAll()">🔄 Refresh</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="realtime-status" style="font-size:10px;padding:3px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--brd);color:var(--txt3);font-weight:600">⏳ Connecting...</span>
+          <button class="btn btn-sm" onclick="loadAll()">🔄 Refresh</button>
+        </div>
       </div>
       <div class="g3" id="dash-metrics">
         <div class="metric"><div class="metric-val" id="m-toko">-</div><div class="metric-lbl">Total Toko</div></div>
@@ -207,7 +210,7 @@ textarea.fi{resize:vertical;min-height:70px}
       </div>
       <div class="tbl-wrap"><table class="tbl">
         <thead><tr>
-          <th>Toko</th><th>Owner</th><th>Paket</th><th>Status</th><th>Selesai</th><th>Aksi</th>
+          <th>Toko</th><th>Owner</th><th>Paket</th><th>Status</th><th>Selesai</th><th>Terakhir Aktif</th><th>Aksi</th>
         </tr></thead>
         <tbody id="toko-tbody"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--txt3)">Memuat...</td></tr></tbody>
       </table></div>
@@ -431,17 +434,22 @@ const SB_URL = 'https://lztdvlrunspmcoewfjcg.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6dGR2bHJ1bnNwbWNvZXdmamNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2ODA5MDIsImV4cCI6MjA5MDI1NjkwMn0.fOxpyctLY6k-QjaMIdUdRHJnsGm7FhPozhWTMBSl9-4';
 const ADMIN_PASS_HASH = '70207515bb6e6993f7ffa43c9a42eb9edef53178ff9a15e928fe5e5eac0dd726'; // SHA-256 hash, bukan password asli
 const FITUR_LIST = [
-  {key:'kasir', label:'🛒 Kasir & Order'},
-  {key:'meja', label:'🪑 Manajemen Meja'},
-  {key:'shift', label:'🔓 Shift Kasir'},
-  {key:'menu', label:'🍽️ Menu & Harga'},
-  {key:'stok', label:'📦 Stok Bahan'},
-  {key:'laporan', label:'📊 Laporan'},
-  {key:'riwayat', label:'📋 Riwayat Transaksi'},
-  {key:'online_order', label:'🛵 Pesanan Online'},
-  {key:'member', label:'👥 Member & Poin'},
-  {key:'rekrutmen', label:'📝 Rekrutmen'},
-  {key:'multi_user', label:'👤 Multi User/Kasir'},
+  {key:'kasir',    label:'🛒 Kasir & Order'},
+  {key:'meja',     label:'🪑 Manajemen Meja'},
+  {key:'shift',    label:'🔓 Shift Kasir'},
+  {key:'menu',     label:'🍽️ Menu & Harga'},
+  {key:'stok',     label:'📦 Stok Bahan'},
+  {key:'laporan',  label:'📊 Laporan'},
+  {key:'riwayat',  label:'📋 Riwayat Transaksi'},
+  {key:'online_order',     label:'🛵 Pesanan Online'},
+  {key:'settings_online',  label:'⚙️ Setting Pesanan Online'},
+  {key:'member',           label:'👥 Member & Poin'},
+  {key:'rekrutmen',        label:'📝 Rekrutmen SDM'},
+  {key:'settings_rekrutmen', label:'⚙️ Setting Form Rekrutmen'},
+  {key:'multi_user',       label:'👤 Multi User/Kasir'},
+  {key:'diskon',           label:'🏷️ Beri Diskon'},
+  {key:'void_trx',         label:'❌ Void Transaksi'},
+  {key:'edit_harga',       label:'✏️ Edit Harga/Menu'},
 ];
 var _sb=null,_plans=[],_tokoData=[],_subData=[],_tokoFilter='all';
 function g(id){return document.getElementById(id);}
@@ -766,21 +774,132 @@ async function loadPaymentInfo() {
 }
 // ═════════════════════════════════════════════════════════════════════════
 
+var _realtimeChannel = null;
+var _pollInterval = null;
+var _lastLoadTime = 0;
+
 async function loadAll(){
   try{
     var r1=await _sb.from('plans').select('*').order('urutan');
-    var r2=await _sb.from('restaurants').select('*').order('created_at',{ascending:false});
+    var r2=await _sb.from('restaurants').select('*,cfg').order('created_at',{ascending:false});
     var r3=await _sb.from('subscriptions').select('*,plans(nama,harga)').order('created_at',{ascending:false});
     _plans=r1.data||[];_tokoData=r2.data||[];_subData=r3.data||[];
+    _lastLoadTime = Date.now();
     renderDashboard();renderTokoTable();renderSubTable();renderPaketCards();
     var opts='<option value="">-- Pilih Paket --</option>'+_plans.map(function(p){
       return '<option value="'+p.id+'">'+p.nama+' (Rp '+p.harga.toLocaleString('id-ID')+'/'+p.periode+')</option>';
     }).join('');
     ['t-plan','sub-plan'].forEach(function(id){var el=g(id);if(el)el.innerHTML=opts;});
-    var pending=_tokoData.filter(function(t){return t.status==='pending';});
-    var badge=g('badge-pending');
-    if(badge){badge.textContent=pending.length;badge.style.display=pending.length>0?'inline':'none';}
+    updatePendingBadge();
+    // Mulai realtime listener setelah load pertama
+    startRealtimeAdmin();
   }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
+}
+
+function updatePendingBadge() {
+  var pending = _tokoData.filter(function(t){ return t.status==='pending'; });
+  var badge = g('badge-pending');
+  if (badge) { badge.textContent=pending.length; badge.style.display=pending.length>0?'inline':'none'; }
+}
+
+function startRealtimeAdmin() {
+  // Bersihkan channel lama jika ada
+  if (_realtimeChannel) {
+    try { _sb.removeChannel(_realtimeChannel); } catch(e){}
+    _realtimeChannel = null;
+  }
+  if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
+
+  // Realtime: dengarkan perubahan tabel restaurants & subscriptions
+  try {
+    _realtimeChannel = _sb.channel('admin-realtime')
+      .on('postgres_changes', {event:'*', schema:'public', table:'restaurants'}, function(payload) {
+        console.log('[Admin] Realtime restaurants:', payload.eventType);
+        handleRealtimeChange(payload, 'restaurants');
+      })
+      .on('postgres_changes', {event:'*', schema:'public', table:'subscriptions'}, function(payload) {
+        console.log('[Admin] Realtime subscriptions:', payload.eventType);
+        handleRealtimeChange(payload, 'subscriptions');
+      })
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') {
+          showRealtimeStatus('🟢 Live', 'var(--green-dk)');
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          showRealtimeStatus('🟡 Polling', 'var(--amber-dk)');
+          startPolling();
+        }
+      });
+  } catch(e) {
+    console.warn('Realtime admin gagal, fallback ke polling:', e.message);
+    startPolling();
+  }
+}
+
+function showRealtimeStatus(label, color) {
+  var el = g('realtime-status');
+  if (!el) return;
+  el.textContent = label;
+  el.style.color = color;
+}
+
+var _realtimePending = {}; // debounce agar tidak flood
+
+function handleRealtimeChange(payload, table) {
+  // Debounce: tunggu 500ms sebelum reload
+  var key = table;
+  if (_realtimePending[key]) clearTimeout(_realtimePending[key]);
+  _realtimePending[key] = setTimeout(function() {
+    delete _realtimePending[key];
+    refreshDataSilent();
+  }, 500);
+}
+
+async function refreshDataSilent() {
+  // Reload data tanpa reset UI
+  try {
+    var r2 = await _sb.from('restaurants').select('*,cfg').order('created_at',{ascending:false});
+    var r3 = await _sb.from('subscriptions').select('*,plans(nama,harga)').order('created_at',{ascending:false});
+    _tokoData = r2.data||[];
+    _subData = r3.data||[];
+    renderDashboard();
+    renderTokoTable();
+    renderSubTable();
+    updatePendingBadge();
+    // Cek force_logout yang sudah selesai
+    checkForceLogoutCleared();
+    showRealtimeStatus('🟢 Live · Updated ' + new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}), 'var(--green-dk)');
+  } catch(e) {
+    console.warn('refreshDataSilent:', e.message);
+  }
+}
+
+// Polling fallback jika realtime tidak tersedia
+function startPolling() {
+  if (_pollInterval) clearInterval(_pollInterval);
+  _pollInterval = setInterval(function() {
+    refreshDataSilent();
+  }, 30000); // setiap 30 detik
+  showRealtimeStatus('🔄 Polling 30s', 'var(--amber-dk)');
+}
+
+// Cek force_logout yang sudah di-clear oleh kasir (sudah logout)
+async function checkForceLogoutCleared() {
+  var forced = _tokoData.filter(function(t){ return t.force_logout; });
+  if (!forced.length) return;
+  for (var i = 0; i < forced.length; i++) {
+    var t = forced[i];
+    // Cek apakah sudah di-clear dari sistem
+    try {
+      var r = await _sb.from('restaurants').select('force_logout').eq('id', t.id).single();
+      if (!r.error && r.data && !r.data.force_logout) {
+        // Sudah di-clear — update lokal dan hapus badge
+        var local = _tokoData.find(function(x){ return x.id===t.id; });
+        if (local) { local.force_logout = false; local.logout_reason = ''; }
+        showNotif('✅ Toko ' + t.nama + ' sudah logout', '#00B894');
+        renderTokoTable();
+      }
+    } catch(e) {}
+  }
 }
 function renderDashboard(){
   var now=new Date();var in7=new Date(now);in7.setDate(in7.getDate()+7);
@@ -872,6 +991,19 @@ function renderTokoTable(){
           '</td>'+
       '<td><div>'+(t.owner_nama||'-')+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.owner_hp||'-')+'</div></td>'+
       '<td>'+planNama+'</td>'+(sb2[ss]||ss)+'<td>'+selesai+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari</div>':'')+'</td>'+
+      '<td style="font-size:11px;color:var(--txt2)">' + (function(){
+        var cfg = t.cfg || {};
+        if (!cfg.lastAccess) return '<span style="color:var(--txt3)">—</span>';
+        var d = new Date(cfg.lastAccess);
+        var diff = Date.now() - d.getTime();
+        var mins = Math.floor(diff/60000);
+        var hrs = Math.floor(mins/60);
+        var days = Math.floor(hrs/24);
+        var kasir = cfg.lastKasir || '';
+        var timeStr = days>0 ? days+'h lalu' : hrs>0 ? hrs+'j lalu' : mins>0 ? mins+'m lalu' : 'baru saja';
+        return '<div style="font-weight:600;color:' + (mins<60?'var(--green-dk)':mins<1440?'var(--blue-dk)':'var(--txt2)') + '">' + timeStr + '</div>' +
+               (kasir ? '<div style="color:var(--txt3)">👤 ' + kasir + '</div>' : '');
+      })() + '</td>'+
       '<td><div style="display:flex;gap:4px">'+
         '<button class="btn btn-sm" onclick="editToko(this.dataset.id)" data-id="'+tid+'">✏️</button>'+
         '<button class="btn btn-sm btn-primary" onclick="editSub(this.dataset.id)" data-id="'+tid+'">📋 Sub</button>'+
@@ -988,10 +1120,23 @@ async function simpanToko(){
 }
 function closeTambahToko(){g('modal-toko').classList.remove('open');}
 async function hapusToko(tokoId){
-  if(!confirm('Hapus toko ini?'))return;
-  try{await _sb.from('subscriptions').delete().eq('restaurant_id',tokoId);
+  var toko = _tokoData.find(function(t){ return t.id===tokoId; });
+  var namaKonfirm = toko ? toko.nama : 'toko ini';
+  if (!confirm('⚠️ HAPUS PERMANEN\n\nToko: ' + namaKonfirm + '\n\nSemua data termasuk menu, transaksi, langganan akan ikut terhapus.\n\nKetik nama toko untuk konfirmasi sudah ditangani via dialog ini.\nLanjutkan hapus?')) return;
+  try {
+    // Hapus data terkait
+    await Promise.all([
+      _sb.from('subscriptions').delete().eq('restaurant_id',tokoId),
+      _sb.from('users').delete().eq('restaurant_id',tokoId),
+      _sb.from('menus').delete().eq('restaurant_id',tokoId),
+    ]);
     await _sb.from('restaurants').delete().eq('id',tokoId);
-    showNotif('✅ Toko dihapus','#00B894');await loadAll();}catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
+    // Update lokal langsung tanpa reload penuh
+    _tokoData = _tokoData.filter(function(t){ return t.id!==tokoId; });
+    _subData = _subData.filter(function(s){ return s.restaurant_id!==tokoId; });
+    renderDashboard(); renderTokoTable(); renderSubTable(); updatePendingBadge();
+    showNotif('✅ Toko ' + namaKonfirm + ' dihapus','#00B894');
+  } catch(e) { showNotif('Gagal hapus: '+e.message,'#EF4444'); }
 }
 function editSub(tokoId){
   var toko=_tokoData.find(function(t){return t.id===tokoId;});
