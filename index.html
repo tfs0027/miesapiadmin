@@ -54,8 +54,15 @@ html{height:100%}
 
 /* Table */
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
-.tbl th{text-align:left;padding:10px 12px;background:var(--bg);border-bottom:2px solid var(--brd);font-weight:700;font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px}
-.tbl td{padding:10px 12px;border-bottom:1px solid var(--brd);vertical-align:middle}
+.tbl th{text-align:left;padding:8px 10px;background:var(--bg);border-bottom:2px solid var(--brd);font-weight:700;font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--brd);vertical-align:middle}
+.tbl td:nth-child(1){min-width:160px;max-width:220px}
+.tbl td:nth-child(2){min-width:120px;max-width:160px}
+.tbl td:nth-child(3){min-width:90px;white-space:nowrap}
+.tbl td:nth-child(4){min-width:80px;white-space:nowrap}
+.tbl td:nth-child(5){min-width:90px;white-space:nowrap}
+.tbl td:nth-child(6){min-width:100px}
+.tbl td:nth-child(7){min-width:220px;white-space:nowrap}
 .tbl tr:hover td{background:var(--bg)}
 .tbl-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--brd)}
 
@@ -970,7 +977,7 @@ function renderTokoTable(){
     return ss===_tokoFilter||t.status===_tokoFilter;
   });
   var tbody=g('toko-tbody');
-  if(!data.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--txt3)">Tidak ada toko</td></tr>';return;}
+  if(!data.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--txt3)">Tidak ada toko</td></tr>';return;}
   var now2=new Date();
   tbody.innerHTML=data.map(function(t){
     var sub=_subData.find(function(s){return s.restaurant_id===t.id;});
@@ -990,7 +997,9 @@ function renderTokoTable(){
           '</div><div style="font-size:11px;color:var(--txt2)">'+(t.alamat||'-')+'</div>' +
           '</td>'+
       '<td><div>'+(t.owner_nama||'-')+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.owner_hp||'-')+'</div></td>'+
-      '<td>'+planNama+'</td>'+(sb2[ss]||ss)+'<td>'+selesai+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari</div>':'')+'</td>'+
+      '<td>'+planNama+'</td>'+
+      '<td>'+(sb2[ss]||ss)+'</td>'+
+      '<td>'+selesai+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari</div>':'')+'</td>'+
       '<td style="font-size:11px;color:var(--txt2)">' + (function(){
         var cfg = t.cfg || {};
         if (!cfg.lastAccess) return '<span style="color:var(--txt3)">—</span>';
@@ -1004,9 +1013,9 @@ function renderTokoTable(){
         return '<div style="font-weight:600;color:' + (mins<60?'var(--green-dk)':mins<1440?'var(--blue-dk)':'var(--txt2)') + '">' + timeStr + '</div>' +
                (kasir ? '<div style="color:var(--txt3)">👤 ' + kasir + '</div>' : '');
       })() + '</td>'+
-      '<td><div style="display:flex;gap:4px">'+
+      '<td><div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">'+
         '<button class="btn btn-sm" onclick="editToko(this.dataset.id)" data-id="'+tid+'">✏️</button>'+
-        '<button class="btn btn-sm btn-primary" onclick="editSub(this.dataset.id)" data-id="'+tid+'">📋 Sub</button>'+
+        '<button class="btn btn-sm btn-primary" onclick="editSub(this.dataset.id)" data-id="'+tid+'" title="Edit Langganan">📋</button>'+
         '<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="copyPosLink(this.dataset.id)" data-id="'+tid+'" title="Copy link POS">🔗 Link</button>'+
         '<button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="kirimLinkWA(this.dataset.id, \'' + (t.owner_hp||'') + '\')" data-id="'+tid+'" title="Kirim via WA">💬</button>'+
         '<button class="btn btn-sm" style="color:var(--red-dk)" onclick="hapusToko(this.dataset.id)" data-id="'+tid+'">🗑️</button>'+
@@ -1125,120 +1134,112 @@ function closeTambahToko(){g('modal-toko').classList.remove('open');}
 async function hapusToko(tokoId){
   var toko = _tokoData.find(function(t){ return t.id===tokoId; });
   var namaKonfirm = toko ? toko.nama : 'toko ini';
-  if (!confirm('⚠️ HAPUS PERMANEN\n\nToko: ' + namaKonfirm + '\n\nSemua data terkait (menu, transaksi, langganan, user) akan ikut terhapus.\n\nLanjutkan?')) return;
+  if (!confirm('⚠️ HAPUS PERMANEN\n\nToko: ' + namaKonfirm + '\n\nSemua data terkait akan dihapus.\n\nLanjutkan?')) return;
 
-  showNotif('⏳ Menghapus toko...', '#6C5CE7');
+  showNotif('⏳ Menghapus...', '#6C5CE7');
+  var errs = [];
+
   try {
-    // Hapus tabel terkait satu per satu & cek error masing-masing
-    var errs = [];
+    // ── STEP 1: Putus FK constraint dulu dengan NULL-kan restaurant_id di subscriptions ──
+    // Ini workaround karena Supabase mungkin punya FK constraint tanpa CASCADE
+    // Coba update restaurant_id ke NULL sebelum delete (jika kolom nullable)
+    // Atau langsung delete dengan urutan yang benar
 
+    // Hapus child tables berurutan (bukan parallel) untuk hindari FK violation
     var r1 = await _sb.from('subscriptions').delete().eq('restaurant_id', tokoId);
-    if (r1.error) errs.push('subscriptions: ' + r1.error.message);
+    if (r1.error) { errs.push('sub:' + r1.error.message); console.warn('del sub:', r1.error); }
 
     var r2 = await _sb.from('users').delete().eq('restaurant_id', tokoId);
-    if (r2.error) errs.push('users: ' + r2.error.message);
+    if (r2.error) { errs.push('users:' + r2.error.message); console.warn('del users:', r2.error); }
 
     var r3 = await _sb.from('menus').delete().eq('restaurant_id', tokoId);
-    if (r3.error) errs.push('menus: ' + r3.error.message);
+    if (r3.error) { errs.push('menus:' + r3.error.message); }
 
     var r4 = await _sb.from('transactions').delete().eq('restaurant_id', tokoId);
-    if (r4.error) errs.push('transactions: ' + r4.error.message);
+    if (r4.error) { errs.push('trx:' + r4.error.message); }
 
     var r5 = await _sb.from('expenses').delete().eq('restaurant_id', tokoId);
-    if (r5.error) errs.push('expenses: ' + r5.error.message);
+    if (r5.error) { errs.push('exp:' + r5.error.message); }
 
-    // Hapus restaurant utama terakhir
-    var r6 = await _sb.from('restaurants').delete().eq('id', tokoId);
-    if (r6.error) {
-      // Ini fatal — restaurants gagal dihapus
-      showNotif('❌ Gagal hapus toko: ' + r6.error.message + (errs.length?' | '+errs.join(', '):''), '#EF4444');
-      console.error('hapusToko error:', r6.error, errs);
+    var r5b = await _sb.from('online_orders').delete().eq('restaurant_id', tokoId);
+    if (r5b.error) { errs.push('orders:' + r5b.error.message); }
+
+    var r5c = await _sb.from('shifts').delete().eq('restaurant_id', tokoId);
+    if (r5c.error) { errs.push('shifts:' + r5c.error.message); }
+
+    // ── STEP 2: Verifikasi subscriptions benar-benar sudah terhapus ──
+    var check = await _sb.from('subscriptions').select('id').eq('restaurant_id', tokoId);
+    if (!check.error && check.data && check.data.length > 0) {
+      // Masih ada! FK akan gagal → coba force delete dengan service key tidak tersedia
+      // Fallback: tandai toko sebagai 'deleted' agar tidak tampil
+      showNotif('⚠️ Subscriptions masih ada (mungkin RLS). Menandai toko sebagai dihapus...', '#F59E0B');
+      await _sb.from('restaurants').update({status:'deleted', nama: '[DIHAPUS] ' + namaKonfirm}).eq('id', tokoId);
+      _tokoData = _tokoData.filter(function(t){ return t.id!==tokoId; });
+      _subData = _subData.filter(function(s){ return s.restaurant_id!==tokoId; });
+      renderDashboard(); renderTokoTable(); renderSubTable(); updatePendingBadge();
+      showNotif('⚠️ Toko ditandai dihapus. Untuk hapus permanen, jalankan SQL di Supabase Dashboard.', '#F59E0B');
+      showSqlHint(tokoId);
       return;
     }
 
-    if (errs.length) {
-      // Data terkait ada yang gagal, tapi toko utama berhasil dihapus
-      console.warn('hapusToko partial errors:', errs);
-      showNotif('✅ Toko dihapus · ⚠️ Sebagian data terkait gagal: ' + errs.join(', '), '#F59E0B');
-    } else {
-      showNotif('✅ Toko ' + namaKonfirm + ' berhasil dihapus', '#00B894');
+    // ── STEP 3: Hapus restaurant utama ──
+    var r6 = await _sb.from('restaurants').delete().eq('id', tokoId);
+    if (r6.error) {
+      showNotif('❌ ' + r6.error.message, '#EF4444');
+      showSqlHint(tokoId);
+      return;
     }
 
-    // Update lokal
+    // Sukses
     _tokoData = _tokoData.filter(function(t){ return t.id!==tokoId; });
     _subData = _subData.filter(function(s){ return s.restaurant_id!==tokoId; });
     renderDashboard(); renderTokoTable(); renderSubTable(); updatePendingBadge();
+    showNotif('✅ Toko ' + namaKonfirm + ' berhasil dihapus' + (errs.length?' (ada warning, cek console)':''), '#00B894');
+    if (errs.length) console.warn('hapusToko warnings:', errs);
 
   } catch(e) {
-    showNotif('❌ Gagal hapus: ' + (e.message||e), '#EF4444');
-    console.error('hapusToko exception:', e);
+    showNotif('❌ Gagal: ' + (e.message||e), '#EF4444');
+    console.error('hapusToko:', e);
   }
 }
-function editSub(tokoId){
-  var toko=_tokoData.find(function(t){return t.id===tokoId;});
-  var sub=_subData.find(function(s){return s.restaurant_id===tokoId;});
-  if(!toko)return;
-  g('sub-edit-id').value=tokoId;g('sub-toko-nama').value=toko.nama;
-  if(sub){
-    g('sub-plan').value=sub.plan_id||'';g('sub-status').value=sub.status||'trial';
-    g('sub-mulai').value=sub.mulai||'';g('sub-selesai').value=sub.selesai||'';
-    g('sub-catatan').value=sub.catatan||'';
-    var fi=sub.fitur_override;if(typeof fi==='string'){try{fi=JSON.parse(fi);}catch(e){fi={};}}
-    buildFiturGrid('sub-fitur-grid',fi||{});
-  }else{
-    var today=new Date().toISOString().substring(0,10);
-    var in14=new Date();in14.setDate(in14.getDate()+14);
-    g('sub-plan').value=_plans.length?_plans[0].id:'';g('sub-status').value='trial';
-    g('sub-mulai').value=today;g('sub-selesai').value=in14.toISOString().substring(0,10);
-    buildFiturGrid('sub-fitur-grid',{});
-  }
-  g('modal-sub').classList.add('open');
+
+function showSqlHint(tokoId) {
+  var q = "'" + tokoId + "'";
+  var nl = String.fromCharCode(10);
+  var sql = 'DELETE FROM subscriptions WHERE restaurant_id = ' + q + ';' + nl +
+            'DELETE FROM users WHERE restaurant_id = ' + q + ';' + nl +
+            'DELETE FROM menus WHERE restaurant_id = ' + q + ';' + nl +
+            'DELETE FROM restaurants WHERE id = ' + q + ';';
+  var box = document.createElement('div');
+  box.id = 'sql-hint-box';
+  box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  var ta = document.createElement('textarea');
+  ta.value = sql;
+  ta.readOnly = true;
+  ta.style.cssText = 'width:100%;height:100px;font-family:monospace;font-size:11px;border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8f8f8;resize:none';
+  var btnCopy = document.createElement('button');
+  btnCopy.textContent = '📋 Salin SQL';
+  btnCopy.style.cssText = 'flex:1;padding:9px;background:#6C5CE7;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700';
+  btnCopy.onclick = function(){ navigator.clipboard && navigator.clipboard.writeText(sql).then(function(){ showNotif('SQL disalin!','#00B894'); }); };
+  var btnClose = document.createElement('button');
+  btnClose.textContent = 'Tutup';
+  btnClose.style.cssText = 'flex:1;padding:9px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-weight:700';
+  btnClose.onclick = function(){ box.remove(); };
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;margin-top:12px';
+  btnRow.appendChild(btnCopy);
+  btnRow.appendChild(btnClose);
+  var inner = document.createElement('div');
+  inner.style.cssText = 'background:#fff;border-radius:14px;padding:24px;max-width:560px;width:100%';
+  inner.innerHTML = '<div style="font-weight:800;font-size:15px;margin-bottom:8px">⚠️ Perlu Hapus Manual via SQL</div>' +
+    '<div style="font-size:12px;color:#555;margin-bottom:12px">Jalankan SQL berikut di <b>Supabase Dashboard → SQL Editor</b>:</div>';
+  inner.appendChild(ta);
+  inner.appendChild(btnRow);
+  box.appendChild(inner);
+  document.body.appendChild(box);
 }
-function updateSubFitur(){
-  var planId=g('sub-plan').value;var plan=_plans.find(function(p){return p.id===planId;});
-  if(plan)buildFiturGrid('sub-fitur-grid',plan.fitur||{});
-}
-async function simpanSub(){
-  var tokoId=g('sub-edit-id').value;var planId=g('sub-plan').value;
-  if(!planId){showNotif('Pilih paket','#EF4444');return;}
-  var payload={restaurant_id:tokoId,plan_id:planId,status:g('sub-status').value,
-    mulai:g('sub-mulai').value,selesai:g('sub-selesai').value,
-    catatan:g('sub-catatan').value,fitur_override:getFiturFromGrid('sub-fitur-grid'),
-    updated_at:new Date().toISOString()};
-  try{
-    var existing=_subData.find(function(s){return s.restaurant_id===tokoId;});
-    if(existing){await _sb.from('subscriptions').update(payload).eq('id',existing.id);}
-    else{await _sb.from('subscriptions').insert(payload);}
-    g('modal-sub').classList.remove('open');showNotif('✅ Langganan diperbarui','#00B894');await loadAll();
-  }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
-}
-function showTambahPaket(){
-  g('modal-paket-title').textContent='💎 Tambah Paket';g('paket-edit-id').value='';
-  ['p-nama','p-badge','p-desc'].forEach(function(id){g(id).value='';});
-  g('p-harga').value=0;g('p-periode').value='bulan';
-  buildFiturGrid('paket-fitur-grid',{});g('modal-paket').classList.add('open');
-}
-function editPaket(planId){
-  var plan=_plans.find(function(p){return p.id===planId;});if(!plan)return;
-  g('modal-paket-title').textContent='✏️ Edit: '+plan.nama;g('paket-edit-id').value=planId;
-  g('p-nama').value=plan.nama||'';g('p-badge').value=plan.badge||'';
-  g('p-harga').value=plan.harga||0;g('p-periode').value=plan.periode||'bulan';
-  g('p-desc').value=plan.deskripsi||'';
-  var fi=plan.fitur;if(typeof fi==='string'){try{fi=JSON.parse(fi);}catch(e){fi={};}}
-  buildFiturGrid('paket-fitur-grid',fi||{});g('modal-paket').classList.add('open');
-}
-async function simpanPaket(){
-  var planId=g('paket-edit-id').value;var nama=g('p-nama').value.trim();
-  if(!nama){showNotif('Nama wajib','#EF4444');return;}
-  var payload={nama:nama,badge:g('p-badge').value.trim()||null,harga:parseInt(g('p-harga').value)||0,
-    periode:g('p-periode').value,deskripsi:g('p-desc').value.trim(),
-    fitur:getFiturFromGrid('paket-fitur-grid'),aktif:true};
-  try{
-    if(planId){await _sb.from('plans').update(payload).eq('id',planId);}
-    else{await _sb.from('plans').insert(payload);}
-    g('modal-paket').classList.remove('open');showNotif('✅ Paket disimpan','#00B894');await loadAll();
-  }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
-}
+
+
 async function hapusPaket(planId){
   if(!confirm('Hapus paket ini?'))return;
   var res = await _sb.from('plans').delete().eq('id',planId);
