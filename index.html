@@ -1125,21 +1125,54 @@ function closeTambahToko(){g('modal-toko').classList.remove('open');}
 async function hapusToko(tokoId){
   var toko = _tokoData.find(function(t){ return t.id===tokoId; });
   var namaKonfirm = toko ? toko.nama : 'toko ini';
-  if (!confirm('⚠️ HAPUS PERMANEN\n\nToko: ' + namaKonfirm + '\n\nSemua data termasuk menu, transaksi, langganan akan ikut terhapus.\n\nKetik nama toko untuk konfirmasi sudah ditangani via dialog ini.\nLanjutkan hapus?')) return;
+  if (!confirm('⚠️ HAPUS PERMANEN\n\nToko: ' + namaKonfirm + '\n\nSemua data terkait (menu, transaksi, langganan, user) akan ikut terhapus.\n\nLanjutkan?')) return;
+
+  showNotif('⏳ Menghapus toko...', '#6C5CE7');
   try {
-    // Hapus data terkait
-    await Promise.all([
-      _sb.from('subscriptions').delete().eq('restaurant_id',tokoId),
-      _sb.from('users').delete().eq('restaurant_id',tokoId),
-      _sb.from('menus').delete().eq('restaurant_id',tokoId),
-    ]);
-    await _sb.from('restaurants').delete().eq('id',tokoId);
-    // Update lokal langsung tanpa reload penuh
+    // Hapus tabel terkait satu per satu & cek error masing-masing
+    var errs = [];
+
+    var r1 = await _sb.from('subscriptions').delete().eq('restaurant_id', tokoId);
+    if (r1.error) errs.push('subscriptions: ' + r1.error.message);
+
+    var r2 = await _sb.from('users').delete().eq('restaurant_id', tokoId);
+    if (r2.error) errs.push('users: ' + r2.error.message);
+
+    var r3 = await _sb.from('menus').delete().eq('restaurant_id', tokoId);
+    if (r3.error) errs.push('menus: ' + r3.error.message);
+
+    var r4 = await _sb.from('transactions').delete().eq('restaurant_id', tokoId);
+    if (r4.error) errs.push('transactions: ' + r4.error.message);
+
+    var r5 = await _sb.from('expenses').delete().eq('restaurant_id', tokoId);
+    if (r5.error) errs.push('expenses: ' + r5.error.message);
+
+    // Hapus restaurant utama terakhir
+    var r6 = await _sb.from('restaurants').delete().eq('id', tokoId);
+    if (r6.error) {
+      // Ini fatal — restaurants gagal dihapus
+      showNotif('❌ Gagal hapus toko: ' + r6.error.message + (errs.length?' | '+errs.join(', '):''), '#EF4444');
+      console.error('hapusToko error:', r6.error, errs);
+      return;
+    }
+
+    if (errs.length) {
+      // Data terkait ada yang gagal, tapi toko utama berhasil dihapus
+      console.warn('hapusToko partial errors:', errs);
+      showNotif('✅ Toko dihapus · ⚠️ Sebagian data terkait gagal: ' + errs.join(', '), '#F59E0B');
+    } else {
+      showNotif('✅ Toko ' + namaKonfirm + ' berhasil dihapus', '#00B894');
+    }
+
+    // Update lokal
     _tokoData = _tokoData.filter(function(t){ return t.id!==tokoId; });
     _subData = _subData.filter(function(s){ return s.restaurant_id!==tokoId; });
     renderDashboard(); renderTokoTable(); renderSubTable(); updatePendingBadge();
-    showNotif('✅ Toko ' + namaKonfirm + ' dihapus','#00B894');
-  } catch(e) { showNotif('Gagal hapus: '+e.message,'#EF4444'); }
+
+  } catch(e) {
+    showNotif('❌ Gagal hapus: ' + (e.message||e), '#EF4444');
+    console.error('hapusToko exception:', e);
+  }
 }
 function editSub(tokoId){
   var toko=_tokoData.find(function(t){return t.id===tokoId;});
@@ -1207,9 +1240,15 @@ async function simpanPaket(){
   }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
 async function hapusPaket(planId){
-  if(!confirm('Hapus paket?'))return;
-  try{await _sb.from('plans').delete().eq('id',planId);showNotif('✅ Dihapus','#00B894');await loadAll();}
-  catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
+  if(!confirm('Hapus paket ini?'))return;
+  var res = await _sb.from('plans').delete().eq('id',planId);
+  if (res.error) {
+    showNotif('❌ Gagal hapus paket: ' + res.error.message, '#EF4444');
+    console.error('hapusPaket:', res.error);
+    return;
+  }
+  showNotif('✅ Paket dihapus', '#00B894');
+  await loadAll();
 }
 
 </script>
