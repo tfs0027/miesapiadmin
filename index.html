@@ -1056,8 +1056,11 @@ function buildFiturGrid(containerId,values){
   var el=g(containerId);if(!el)return;
   el.innerHTML=FITUR_LIST.map(function(f){
     var on=values&&values[f.key];
-    return '<label class="feat-item '+(on?'on':'')+'" onclick="this.classList.toggle(\'on\',this.querySelector(\'input\').checked)">'+
-      '<input type="checkbox" '+(on?'checked':'')+' data-key="'+f.key+'">'+f.label+'</label>';
+    // FIX: gunakan onchange di input (bukan onclick di label) agar .checked sudah ter-update saat event jalan
+    return '<label class="feat-item '+(on?'on':'')+'">'+
+      '<input type="checkbox" '+(on?'checked':'')+' data-key="'+f.key+'"'+
+      ' onchange="this.closest(\'.feat-item\').classList.toggle(\'on\',this.checked)">'+
+      f.label+'</label>';
   }).join('');
 }
 function getFiturFromGrid(containerId){
