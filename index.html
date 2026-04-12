@@ -1015,6 +1015,7 @@ function renderTokoTable(){
       })() + '</td>'+
       '<td><div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">'+
         '<button class="btn btn-sm" onclick="editToko(this.dataset.id)" data-id="'+tid+'">✏️</button>'+
+        (t.bukti_bayar ? '<button class="btn btn-sm" style="background:var(--amber);color:#fff" onclick="lihatBukti(this.dataset.id)" data-id="'+tid+'" title="Lihat bukti bayar">📸 Bukti</button>' : '')+
         '<button class="btn btn-sm btn-primary" onclick="editSub(this.dataset.id)" data-id="'+tid+'" title="Edit Langganan">📋</button>'+
         '<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="copyPosLink(this.dataset.id)" data-id="'+tid+'" title="Copy link POS">🔗 Link</button>'+
         '<button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="kirimLinkWA(this.dataset.id, \'' + (t.owner_hp||'') + '\')" data-id="'+tid+'" title="Kirim via WA">💬</button>'+
@@ -1131,6 +1132,85 @@ async function simpanToko(){
   }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
 function closeTambahToko(){g('modal-toko').classList.remove('open');}
+function lihatBukti(tokoId) {
+  var toko = _tokoData.find(function(t){ return t.id===tokoId; });
+  if (!toko || !toko.bukti_bayar) { showNotif('Tidak ada bukti pembayaran untuk toko ini', '#F59E0B'); return; }
+
+  // Buat modal preview bukti
+  var existing = document.getElementById('bukti-modal-overlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'bukti-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:#fff;border-radius:16px;padding:20px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto';
+
+  var header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
+  var titleDiv = document.createElement('div');
+  titleDiv.innerHTML = '<div style="font-size:15px;font-weight:800">📸 Bukti Pembayaran</div>'
+    + '<div style="font-size:12px;color:#666;margin-top:2px">'+toko.nama+'</div>';
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕ Tutup';
+  closeBtn.style.cssText = 'background:#eee;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:700';
+  closeBtn.onclick = function(){ overlay.remove(); };
+  header.appendChild(titleDiv);
+  header.appendChild(closeBtn);
+
+  var img = document.createElement('img');
+  img.src = toko.bukti_bayar;
+  img.style.cssText = 'width:100%;border-radius:10px;border:1px solid #e5e7eb;display:block';
+  img.alt = 'Bukti pembayaran '+toko.nama;
+
+  var info = document.createElement('div');
+  info.style.cssText = 'margin-top:12px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;color:#555';
+  var tgl = toko.created_at ? new Date(toko.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
+  var sub = _subData.find(function(s){return s.restaurant_id===tokoId;});
+  var planNama = sub&&sub.plans ? sub.plans.nama : '-';
+  info.innerHTML = '<b>Nama Toko:</b> '+toko.nama+'<br>'
+    +'<b>Owner:</b> '+( toko.owner_nama||'-')+' · '+(toko.owner_hp||'-')+'<br>'
+    +'<b>Paket:</b> '+planNama+'<br>'
+    +'<b>Daftar:</b> '+tgl+'<br>'
+    +'<b>Status:</b> '+toko.status;
+
+  var actions = document.createElement('div');
+  actions.style.cssText = 'display:flex;gap:8px;margin-top:12px';
+
+  var btnApprove = document.createElement('button');
+  btnApprove.textContent = '✅ Aktivasi Toko';
+  btnApprove.style.cssText = 'flex:1;padding:10px;background:var(--green);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px';
+  btnApprove.onclick = function() { aktivasiToko(tokoId, toko.nama); overlay.remove(); };
+
+  var btnDownload = document.createElement('a');
+  btnDownload.href = toko.bukti_bayar;
+  btnDownload.download = 'bukti-' + (toko.nama||'toko').split(' ').join('-') + '.jpg';
+  btnDownload.textContent = '⬇️ Unduh';
+  btnDownload.style.cssText = 'flex:1;padding:10px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;text-align:center;text-decoration:none;color:#333';
+
+  actions.appendChild(btnApprove);
+  actions.appendChild(btnDownload);
+
+  modal.appendChild(header);
+  modal.appendChild(img);
+  modal.appendChild(info);
+  modal.appendChild(actions);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+async function aktivasiToko(tokoId, namaKonfirm) {
+  var res = await _sb.from('subscriptions').update({status:'active'}).eq('restaurant_id', tokoId);
+  var res2 = await _sb.from('restaurants').update({status:'active'}).eq('id', tokoId);
+  if (res.error || res2.error) {
+    showNotif('❌ Gagal aktivasi: '+((res.error||res2.error).message), '#EF4444'); return;
+  }
+  showNotif('✅ Toko '+namaKonfirm+' diaktifkan!', '#00B894');
+  await refreshDataSilent();
+}
+
 async function hapusToko(tokoId){
   var toko = _tokoData.find(function(t){ return t.id===tokoId; });
   var namaKonfirm = toko ? toko.nama : 'toko ini';
