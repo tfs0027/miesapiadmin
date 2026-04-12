@@ -1386,6 +1386,72 @@ function showSqlHint(tokoId) {
 }
 
 
+// ══════════════════════════════════════════════════════════════
+// PAKET CRUD
+// ══════════════════════════════════════════════════════════════
+function showTambahPaket() {
+  g('modal-paket-title').textContent = '💎 Tambah Paket';
+  g('paket-edit-id').value = '';
+  ['p-nama','p-badge','p-harga','p-desc'].forEach(function(id){var el=g(id);if(el)el.value='';});
+  var periodeEl = g('p-periode'); if (periodeEl) periodeEl.value = 'bulan';
+  buildFiturGrid('paket-fitur-grid', {});
+  g('modal-paket').classList.add('open');
+}
+
+function editPaket(planId) {
+  var plan = _plans.find(function(p){ return p.id === planId; });
+  if (!plan) return;
+  g('modal-paket-title').textContent = '✏️ Edit Paket';
+  g('paket-edit-id').value = planId;
+  var n=g('p-nama'); if(n) n.value = plan.nama||'';
+  var b=g('p-badge'); if(b) b.value = plan.badge||'';
+  var h=g('p-harga'); if(h) h.value = plan.harga||0;
+  var pr=g('p-periode'); if(pr) pr.value = plan.periode||'bulan';
+  var d=g('p-desc'); if(d) d.value = plan.deskripsi||'';
+  // Load fitur — parse jika string JSON
+  var fitur = plan.fitur || {};
+  if (typeof fitur === 'string') { try { fitur = JSON.parse(fitur); } catch(e) { fitur = {}; } }
+  buildFiturGrid('paket-fitur-grid', fitur);
+  g('modal-paket').classList.add('open');
+}
+
+async function simpanPaket() {
+  var editId = (g('paket-edit-id')||{value:''}).value;
+  var nama   = (g('p-nama')||{value:''}).value.trim();
+  var badge  = (g('p-badge')||{value:''}).value.trim();
+  var harga  = parseFloat((g('p-harga')||{value:'0'}).value)||0;
+  var periode= (g('p-periode')||{value:'bulan'}).value;
+  var desc   = (g('p-desc')||{value:''}).value.trim();
+  var fitur  = getFiturFromGrid('paket-fitur-grid');
+
+  if (!nama) { showNotif('Nama paket wajib diisi', '#EF4444'); return; }
+
+  var payload = {
+    nama: nama,
+    badge: badge||null,
+    harga: harga,
+    periode: periode,
+    deskripsi: desc,
+    fitur: fitur,
+    urutan: editId ? undefined : (_plans.length + 1)
+  };
+  // Hapus key undefined
+  Object.keys(payload).forEach(function(k){ if(payload[k]===undefined) delete payload[k]; });
+
+  try {
+    var res;
+    if (editId) {
+      res = await _sb.from('plans').update(payload).eq('id', editId);
+    } else {
+      res = await _sb.from('plans').insert(payload);
+    }
+    if (res.error) { showNotif('❌ ' + res.error.message, '#EF4444'); return; }
+    showNotif('✅ Paket ' + nama + ' disimpan', '#00B894');
+    g('modal-paket').classList.remove('open');
+    await loadAll();
+  } catch(e) { showNotif('❌ ' + (e.message||e), '#EF4444'); }
+}
+
 async function hapusPaket(planId){
   if(!confirm('Hapus paket ini?'))return;
   var res = await _sb.from('plans').delete().eq('id',planId);
