@@ -176,9 +176,9 @@ textarea.fi{resize:vertical;min-height:70px}
     <div class="page active" id="page-dashboard">
       <div class="topbar">
         <div><div class="page-title">📊 Dashboard</div><div class="page-sub">Ringkasan sistem WarungKu</div></div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span id="realtime-status" style="font-size:10px;padding:3px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--brd);color:var(--txt3);font-weight:600">⏳ Connecting...</span>
-          <button class="btn btn-sm" onclick="loadAll()">🔄 Refresh</button>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span id="realtime-status" style="font-size:10px;padding:3px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--brd);color:var(--txt3);font-weight:600;cursor:pointer" onclick="refreshDataSilent();showNotif('🔄 Memperbarui data...','#6C5CE7')" title="Klik untuk refresh sekarang">⏳ Connecting...</span>
+          <button class="btn btn-sm" onclick="manualRefresh()" title="Refresh data sekarang">🔄 Refresh</button>
         </div>
       </div>
       <div class="g3" id="dash-metrics">
@@ -798,8 +798,12 @@ async function loadAll(){
     }).join('');
     ['t-plan','sub-plan'].forEach(function(id){var el=g(id);if(el)el.innerHTML=opts;});
     updatePendingBadge();
-    // Mulai realtime listener setelah load pertama
+    // Set baseline counter untuk deteksi toko baru
+    _lastTokoCount = _tokoData.length;
+    _lastPendingCount = _tokoData.filter(function(t){return t.status==='pending';}).length;
+    // Mulai realtime + polling
     startRealtimeAdmin();
+    startPolling(); // Selalu jalankan polling sebagai safety net
   }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
 
@@ -831,8 +835,11 @@ function startRealtimeAdmin() {
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') {
           showRealtimeStatus('🟢 Live', 'var(--green-dk)');
+          // Tetap jalankan polling sebagai safety net (tiap 60 detik)
+          if (_pollInterval) clearInterval(_pollInterval);
+          _pollInterval = setInterval(refreshDataSilent, 60000);
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          showRealtimeStatus('🟡 Polling', 'var(--amber-dk)');
+          showRealtimeStatus('🔄 Auto-refresh 15s', 'var(--amber-dk)');
           startPolling();
         }
       });
@@ -849,6 +856,13 @@ function showRealtimeStatus(label, color) {
   el.style.color = color;
 }
 
+async function manualRefresh() {
+  showRealtimeStatus('🔄 Memperbarui...', 'var(--accent)');
+  await refreshDataSilent();
+  // Reset countdown
+  _pollCountdown = 15;
+}
+
 var _realtimePending = {}; // debounce agar tidak flood
 
 function handleRealtimeChange(payload, table) {
@@ -861,32 +875,84 @@ function handleRealtimeChange(payload, table) {
   }, 500);
 }
 
+var _lastTokoCount = 0;
+var _lastPendingCount = 0;
+
 async function refreshDataSilent() {
-  // Reload data tanpa reset UI
   try {
     var r2 = await _sb.from('restaurants').select('*,cfg').order('created_at',{ascending:false});
     var r3 = await _sb.from('subscriptions').select('*,plans(nama,harga)').order('created_at',{ascending:false});
-    _tokoData = r2.data||[];
-    _subData = r3.data||[];
+
+    var newTokoData = r2.data||[];
+    var newSubData  = r3.data||[];
+
+    // Deteksi toko baru masuk
+    var newCount = newTokoData.length;
+    var newPending = newTokoData.filter(function(t){return t.status==='pending';}).length;
+    if (_lastTokoCount > 0 && newCount > _lastTokoCount) {
+      var diff = newCount - _lastTokoCount;
+      showNotif('🆕 ' + diff + ' toko baru mendaftar!', '#6C5CE7');
+      // Jika di halaman lain, tambah visual indicator
+      var badge = g('badge-pending');
+      if (badge) { badge.style.animation = 'none'; setTimeout(function(){ badge.style.animation=''; }, 100); }
+    }
+    if (_lastPendingCount > 0 && newPending > _lastPendingCount) {
+      showNotif('⏳ Ada pendaftaran baru menunggu aktivasi', '#F59E0B');
+    }
+
+    _lastTokoCount  = newCount;
+    _lastPendingCount = newPending;
+    _tokoData = newTokoData;
+    _subData  = newSubData;
+
     renderDashboard();
     renderTokoTable();
     renderSubTable();
     updatePendingBadge();
-    // Cek force_logout yang sudah selesai
     checkForceLogoutCleared();
-    showRealtimeStatus('🟢 Live · Updated ' + new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}), 'var(--green-dk)');
+
+    var now = new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    // Jika realtime aktif tampilkan Live, jika tidak tampilkan waktu update
+    var isLive = _realtimeChannel !== null;
+    showRealtimeStatus(
+      isLive ? '🟢 Live · ' + now : '🔄 Updated ' + now,
+      isLive ? 'var(--green-dk)' : 'var(--blue-dk)'
+    );
   } catch(e) {
     console.warn('refreshDataSilent:', e.message);
+    showRealtimeStatus('⚠️ Gagal update', 'var(--red-dk)');
   }
 }
 
-// Polling fallback jika realtime tidak tersedia
+// Polling — selalu aktif sebagai safety net (tiap 15 detik)
+var _pollCountdown = 15;
+var _countdownTimer = null;
+
 function startPolling() {
   if (_pollInterval) clearInterval(_pollInterval);
+  if (_countdownTimer) clearInterval(_countdownTimer);
+
+  _pollCountdown = 15;
   _pollInterval = setInterval(function() {
+    _pollCountdown = 15;
     refreshDataSilent();
-  }, 30000); // setiap 30 detik
-  showRealtimeStatus('🔄 Polling 30s', 'var(--amber-dk)');
+  }, 15000);
+
+  // Countdown visual tiap detik
+  _countdownTimer = setInterval(function() {
+    _pollCountdown = Math.max(0, _pollCountdown - 1);
+    var statusEl = g('realtime-status');
+    if (statusEl && statusEl.textContent.includes('Polling')) {
+      statusEl.textContent = '🔄 Auto-refresh dalam ' + _pollCountdown + 's';
+    }
+  }, 1000);
+
+  showRealtimeStatus('🔄 Auto-refresh dalam 15s', 'var(--amber-dk)');
+}
+
+function stopPolling() {
+  if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
+  if (_countdownTimer) { clearInterval(_countdownTimer); _countdownTimer = null; }
 }
 
 // Cek force_logout yang sudah di-clear oleh kasir (sudah logout)
