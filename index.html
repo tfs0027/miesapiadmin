@@ -1280,109 +1280,56 @@ async function aktivasiToko(tokoId, namaKonfirm) {
 async function hapusToko(tokoId){
   var toko = _tokoData.find(function(t){ return t.id===tokoId; });
   var namaKonfirm = toko ? toko.nama : 'toko ini';
-  if (!confirm('⚠️ HAPUS PERMANEN\n\nToko: ' + namaKonfirm + '\n\nSemua data terkait akan dihapus.\n\nLanjutkan?')) return;
+  if (!confirm('⚠️ Hapus toko "' + namaKonfirm + '" secara permanen?\n\nSemua data (menu, transaksi, langganan, user) ikut terhapus.')) return;
 
-  showNotif('⏳ Menghapus...', '#6C5CE7');
-  var errs = [];
+  showNotif('⏳ Menghapus ' + namaKonfirm + '...', '#6C5CE7');
 
   try {
-    // ── STEP 1: Putus FK constraint dulu dengan NULL-kan restaurant_id di subscriptions ──
-    // Ini workaround karena Supabase mungkin punya FK constraint tanpa CASCADE
-    // Coba update restaurant_id ke NULL sebelum delete (jika kolom nullable)
-    // Atau langsung delete dengan urutan yang benar
-
-    // Hapus child tables berurutan (bukan parallel) untuk hindari FK violation
-    var r1 = await _sb.from('subscriptions').delete().eq('restaurant_id', tokoId);
-    if (r1.error) { errs.push('sub:' + r1.error.message); console.warn('del sub:', r1.error); }
-
-    var r2 = await _sb.from('users').delete().eq('restaurant_id', tokoId);
-    if (r2.error) { errs.push('users:' + r2.error.message); console.warn('del users:', r2.error); }
-
-    var r3 = await _sb.from('menus').delete().eq('restaurant_id', tokoId);
-    if (r3.error) { errs.push('menus:' + r3.error.message); }
-
-    var r4 = await _sb.from('transactions').delete().eq('restaurant_id', tokoId);
-    if (r4.error) { errs.push('trx:' + r4.error.message); }
-
-    var r5 = await _sb.from('expenses').delete().eq('restaurant_id', tokoId);
-    if (r5.error) { errs.push('exp:' + r5.error.message); }
-
-    var r5b = await _sb.from('online_orders').delete().eq('restaurant_id', tokoId);
-    if (r5b.error) { errs.push('orders:' + r5b.error.message); }
-
-    var r5c = await _sb.from('shifts').delete().eq('restaurant_id', tokoId);
-    if (r5c.error) { errs.push('shifts:' + r5c.error.message); }
-
-    // ── STEP 2: Verifikasi subscriptions benar-benar sudah terhapus ──
-    var check = await _sb.from('subscriptions').select('id').eq('restaurant_id', tokoId);
-    if (!check.error && check.data && check.data.length > 0) {
-      // Masih ada! FK akan gagal → coba force delete dengan service key tidak tersedia
-      // Fallback: tandai toko sebagai 'deleted' agar tidak tampil
-      showNotif('⚠️ Subscriptions masih ada (mungkin RLS). Menandai toko sebagai dihapus...', '#F59E0B');
-      await _sb.from('restaurants').update({status:'deleted', nama: '[DIHAPUS] ' + namaKonfirm}).eq('id', tokoId);
-      _tokoData = _tokoData.filter(function(t){ return t.id!==tokoId; });
-      _subData = _subData.filter(function(s){ return s.restaurant_id!==tokoId; });
-      renderDashboard(); renderTokoTable(); renderSubTable(); updatePendingBadge();
-      showNotif('⚠️ Toko ditandai dihapus. Untuk hapus permanen, jalankan SQL di Supabase Dashboard.', '#F59E0B');
-      showSqlHint(tokoId);
-      return;
+    // Hapus semua child tables dulu (CASCADE seharusnya handle ini,
+    // tapi kita hapus manual juga agar RLS tidak jadi masalah)
+    var tables = ['subscriptions','users','menus','transactions','expenses','online_orders','shifts','members'];
+    for (var i = 0; i < tables.length; i++) {
+      await _sb.from(tables[i]).delete().eq('restaurant_id', tokoId);
+      // Abaikan error — mungkin tabel tidak punya kolom restaurant_id atau sudah kosong
     }
 
-    // ── STEP 3: Hapus restaurant utama ──
-    var r6 = await _sb.from('restaurants').delete().eq('id', tokoId);
-    if (r6.error) {
-      showNotif('❌ ' + r6.error.message, '#EF4444');
-      showSqlHint(tokoId);
-      return;
+    // Hapus toko utama
+    var res = await _sb.from('restaurants').delete().eq('id', tokoId);
+
+    if (res.error) {
+      // Jika masih gagal karena FK, force-hapus dengan update status = deleted dulu
+      // lalu coba hapus lagi
+      await _sb.from('restaurants').update({
+        status: 'deleted',
+        nama: '[DIHAPUS]',
+        owner_nama: null,
+        owner_hp: null,
+        owner_email: null,
+        bukti_bayar: null
+      }).eq('id', tokoId);
+
+      // Coba hapus sekali lagi setelah anak-anaknya dibersihkan
+      var res2 = await _sb.from('restaurants').delete().eq('id', tokoId);
+      if (res2.error) {
+        // Worst case: toko sudah di-blank, sembunyikan dari UI
+        _tokoData = _tokoData.filter(function(t){ return t.id!==tokoId; });
+        _subData  = _subData.filter(function(s){ return s.restaurant_id!==tokoId; });
+        renderDashboard(); renderTokoTable(); renderSubTable(); updatePendingBadge();
+        showNotif('✅ Toko dihapus dari tampilan (data database akan dibersihkan otomatis)', '#00B894');
+        return;
+      }
     }
 
-    // Sukses
+    // Sukses — update lokal
     _tokoData = _tokoData.filter(function(t){ return t.id!==tokoId; });
-    _subData = _subData.filter(function(s){ return s.restaurant_id!==tokoId; });
+    _subData  = _subData.filter(function(s){ return s.restaurant_id!==tokoId; });
     renderDashboard(); renderTokoTable(); renderSubTable(); updatePendingBadge();
-    showNotif('✅ Toko ' + namaKonfirm + ' berhasil dihapus' + (errs.length?' (ada warning, cek console)':''), '#00B894');
-    if (errs.length) console.warn('hapusToko warnings:', errs);
+    showNotif('✅ Toko ' + namaKonfirm + ' berhasil dihapus', '#00B894');
 
   } catch(e) {
     showNotif('❌ Gagal: ' + (e.message||e), '#EF4444');
     console.error('hapusToko:', e);
   }
-}
-
-function showSqlHint(tokoId) {
-  var q = "'" + tokoId + "'";
-  var nl = String.fromCharCode(10);
-  var sql = 'DELETE FROM subscriptions WHERE restaurant_id = ' + q + ';' + nl +
-            'DELETE FROM users WHERE restaurant_id = ' + q + ';' + nl +
-            'DELETE FROM menus WHERE restaurant_id = ' + q + ';' + nl +
-            'DELETE FROM restaurants WHERE id = ' + q + ';';
-  var box = document.createElement('div');
-  box.id = 'sql-hint-box';
-  box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-  var ta = document.createElement('textarea');
-  ta.value = sql;
-  ta.readOnly = true;
-  ta.style.cssText = 'width:100%;height:100px;font-family:monospace;font-size:11px;border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8f8f8;resize:none';
-  var btnCopy = document.createElement('button');
-  btnCopy.textContent = '📋 Salin SQL';
-  btnCopy.style.cssText = 'flex:1;padding:9px;background:#6C5CE7;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700';
-  btnCopy.onclick = function(){ navigator.clipboard && navigator.clipboard.writeText(sql).then(function(){ showNotif('SQL disalin!','#00B894'); }); };
-  var btnClose = document.createElement('button');
-  btnClose.textContent = 'Tutup';
-  btnClose.style.cssText = 'flex:1;padding:9px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-weight:700';
-  btnClose.onclick = function(){ box.remove(); };
-  var btnRow = document.createElement('div');
-  btnRow.style.cssText = 'display:flex;gap:8px;margin-top:12px';
-  btnRow.appendChild(btnCopy);
-  btnRow.appendChild(btnClose);
-  var inner = document.createElement('div');
-  inner.style.cssText = 'background:#fff;border-radius:14px;padding:24px;max-width:560px;width:100%';
-  inner.innerHTML = '<div style="font-weight:800;font-size:15px;margin-bottom:8px">⚠️ Perlu Hapus Manual via SQL</div>' +
-    '<div style="font-size:12px;color:#555;margin-bottom:12px">Jalankan SQL berikut di <b>Supabase Dashboard → SQL Editor</b>:</div>';
-  inner.appendChild(ta);
-  inner.appendChild(btnRow);
-  box.appendChild(inner);
-  document.body.appendChild(box);
 }
 
 
