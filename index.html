@@ -2,6 +2,15 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+<script>
+// Redirect HTTP → HTTPS di production
+if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+  location.replace('https:' + location.href.substring(5));
+}
+</script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>WarungKu Admin Panel</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -54,15 +63,8 @@ html{height:100%}
 
 /* Table */
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
-.tbl th{text-align:left;padding:8px 10px;background:var(--bg);border-bottom:2px solid var(--brd);font-weight:700;font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
-.tbl td{padding:8px 10px;border-bottom:1px solid var(--brd);vertical-align:middle}
-.tbl td:nth-child(1){min-width:160px;max-width:220px}
-.tbl td:nth-child(2){min-width:120px;max-width:160px}
-.tbl td:nth-child(3){min-width:90px;white-space:nowrap}
-.tbl td:nth-child(4){min-width:80px;white-space:nowrap}
-.tbl td:nth-child(5){min-width:90px;white-space:nowrap}
-.tbl td:nth-child(6){min-width:100px}
-.tbl td:nth-child(7){min-width:220px;white-space:nowrap}
+.tbl th{text-align:left;padding:10px 12px;background:var(--bg);border-bottom:2px solid var(--brd);font-weight:700;font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--brd);vertical-align:middle}
 .tbl tr:hover td{background:var(--bg)}
 .tbl-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--brd)}
 
@@ -176,10 +178,7 @@ textarea.fi{resize:vertical;min-height:70px}
     <div class="page active" id="page-dashboard">
       <div class="topbar">
         <div><div class="page-title">📊 Dashboard</div><div class="page-sub">Ringkasan sistem WarungKu</div></div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span id="realtime-status" style="font-size:10px;padding:3px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--brd);color:var(--txt3);font-weight:600;cursor:pointer" onclick="refreshDataSilent();showNotif('🔄 Memperbarui data...','#6C5CE7')" title="Klik untuk refresh sekarang">⏳ Connecting...</span>
-          <button class="btn btn-sm" onclick="manualRefresh()" title="Refresh data sekarang">🔄 Refresh</button>
-        </div>
+        <button class="btn btn-sm" onclick="loadAll()">🔄 Refresh</button>
       </div>
       <div class="g3" id="dash-metrics">
         <div class="metric"><div class="metric-val" id="m-toko">-</div><div class="metric-lbl">Total Toko</div></div>
@@ -217,7 +216,7 @@ textarea.fi{resize:vertical;min-height:70px}
       </div>
       <div class="tbl-wrap"><table class="tbl">
         <thead><tr>
-          <th>Toko</th><th>Owner</th><th>Paket</th><th>Status</th><th>Selesai</th><th>Terakhir Aktif</th><th>Aksi</th>
+          <th>Toko</th><th>Owner</th><th>Paket</th><th>Status</th><th>Selesai</th><th>Aksi</th>
         </tr></thead>
         <tbody id="toko-tbody"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--txt3)">Memuat...</td></tr></tbody>
       </table></div>
@@ -280,35 +279,6 @@ textarea.fi{resize:vertical;min-height:70px}
           </div>
           <button class="btn btn-primary" style="width:100%" onclick="savePengaturanAdmin()">💾 Simpan</button>
         </div>
-        <div class="card">
-          <div class="card-hd"><span class="card-title">💳 Info Pembayaran Pendaftaran</span></div>
-          <div style="font-size:12px;color:var(--txt2);margin-bottom:14px">
-            Info rekening bank dan QRIS yang ditampilkan ke calon toko di halaman registrasi.
-          </div>
-
-          <div style="font-weight:700;font-size:12px;color:var(--txt2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">🏦 Rekening Bank</div>
-          <div id="bank-payment-rows"></div>
-          <button class="btn btn-sm" onclick="tambahBankPayment()" style="margin-bottom:16px">+ Tambah Rekening</button>
-
-          <div style="font-weight:700;font-size:12px;color:var(--txt2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">📲 QRIS</div>
-          <div class="form-group">
-            <label class="form-lbl">Nama QRIS</label>
-            <input class="fi" id="cfg-pay-qris-nama" placeholder="WarungKu Indonesia">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">Upload Gambar QRIS</label>
-            <input type="file" id="cfg-pay-qris-file" accept="image/*" style="display:none" onchange="previewPayQris(this)">
-            <label for="cfg-pay-qris-file" style="display:block;padding:10px 14px;border:2px dashed var(--brd);border-radius:var(--radius);cursor:pointer;text-align:center;font-size:12px;color:var(--txt2)">
-              📁 Klik untuk upload gambar QRIS
-            </label>
-            <div id="pay-qris-preview" style="margin-top:8px;display:none">
-              <img id="pay-qris-img" style="max-width:180px;border-radius:8px;border:1px solid var(--brd)" src="">
-              <button class="btn btn-sm" style="color:var(--red-dk);display:block;margin-top:4px" onclick="hapusPayQris()">🗑️ Hapus</button>
-            </div>
-          </div>
-          <button class="btn btn-primary" style="width:100%" onclick="savePaymentInfo()">💾 Simpan Info Pembayaran</button>
-        </div>
-
         <div class="card">
           <div class="card-hd"><span class="card-title">🔐 Password Admin</span></div>
           <div style="font-size:12px;color:var(--txt2);margin-bottom:12px">Ubah password login super admin.</div>
@@ -436,27 +406,28 @@ textarea.fi{resize:vertical;min-height:70px}
 </div>
 
 <script>
+// ── XSS sanitizer ─────────────────────────────────────────────────────────
+function escHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 
 const SB_URL = 'https://lztdvlrunspmcoewfjcg.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6dGR2bHJ1bnNwbWNvZXdmamNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2ODA5MDIsImV4cCI6MjA5MDI1NjkwMn0.fOxpyctLY6k-QjaMIdUdRHJnsGm7FhPozhWTMBSl9-4';
 const ADMIN_PASS_HASH = '70207515bb6e6993f7ffa43c9a42eb9edef53178ff9a15e928fe5e5eac0dd726'; // SHA-256 hash, bukan password asli
 const FITUR_LIST = [
-  {key:'kasir',    label:'🛒 Kasir & Order'},
-  {key:'meja',     label:'🪑 Manajemen Meja'},
-  {key:'shift',    label:'🔓 Shift Kasir'},
-  {key:'menu',     label:'🍽️ Menu & Harga'},
-  {key:'stok',     label:'📦 Stok Bahan'},
-  {key:'laporan',  label:'📊 Laporan'},
-  {key:'riwayat',  label:'📋 Riwayat Transaksi'},
-  {key:'online_order',     label:'🛵 Pesanan Online'},
-  {key:'settings_online',  label:'⚙️ Setting Pesanan Online'},
-  {key:'member',           label:'👥 Member & Poin'},
-  {key:'rekrutmen',        label:'📝 Rekrutmen SDM'},
-  {key:'settings_rekrutmen', label:'⚙️ Setting Form Rekrutmen'},
-  {key:'multi_user',       label:'👤 Multi User/Kasir'},
-  {key:'diskon',           label:'🏷️ Beri Diskon'},
-  {key:'void_trx',         label:'❌ Void Transaksi'},
-  {key:'edit_harga',       label:'✏️ Edit Harga/Menu'},
+  {key:'kasir', label:'🛒 Kasir & Order'},
+  {key:'meja', label:'🪑 Manajemen Meja'},
+  {key:'shift', label:'🔓 Shift Kasir'},
+  {key:'menu', label:'🍽️ Menu & Harga'},
+  {key:'stok', label:'📦 Stok Bahan'},
+  {key:'laporan', label:'📊 Laporan'},
+  {key:'riwayat', label:'📋 Riwayat Transaksi'},
+  {key:'online_order', label:'🛵 Pesanan Online'},
+  {key:'member', label:'👥 Member & Poin'},
+  {key:'rekrutmen', label:'📝 Rekrutmen'},
+  {key:'multi_user', label:'👤 Multi User/Kasir'},
 ];
 var _sb=null,_plans=[],_tokoData=[],_subData=[],_tokoFilter='all';
 function g(id){return document.getElementById(id);}
@@ -526,15 +497,6 @@ async function hashPassword(pass) {
 function loadAdminCFG(){
   try{ _adminCFG=JSON.parse(localStorage.getItem("wkadmin_cfg")||"{}"); }catch(e){ _adminCFG={}; }
   POS_BASE_URL = _adminCFG.posBaseUrl || POS_BASE_URL;
-  // Load admin password hash dari Supabase system_config (prioritas atas localStorage)
-  if (typeof _sb !== 'undefined' && _sb) {
-    _sb.from('system_config').select('value').eq('key','admin_pass_hash').single()
-      .then(function(r){
-        if (!r.error && r.data && r.data.value) {
-          _adminCFG.adminPassHash = r.data.value;
-        }
-      });
-  }
 }
 function saveAdminCFG(){
   try{ localStorage.setItem("wkadmin_cfg", JSON.stringify(_adminCFG)); }catch(e){}
@@ -592,20 +554,11 @@ async function ubahPassword(){
   if (lamaHash !== storedHash2) { showNotif('Password lama salah','#EF4444'); return; }
   if(!baru||baru.length<6){ showNotif("Password baru minimal 6 karakter","#EF4444"); return; }
   if(baru!==konfirm){ showNotif("Konfirmasi tidak cocok","#EF4444"); return; }
-  var baruHash = await hashPassword(baru);
-  _adminCFG.adminPassHash = baruHash;
-  saveAdminCFG();
-  // Sync password hash ke Supabase system_config
-  if (_sb) {
-    try {
-      await _sb.from('system_config').upsert({key: 'admin_pass_hash', value: baruHash}, {onConflict: 'key'});
-      showNotif("✅ Password berhasil diubah & tersync ke Supabase","#00B894");
-    } catch(e) {
-      showNotif("✅ Password diubah (lokal) · Sync Supabase gagal: " + e.message, "#F59E0B");
-    }
-  } else {
-    showNotif("✅ Password berhasil diubah","#00B894");
-  }
+  hashPassword(baru).then(function(h){
+    _adminCFG.adminPassHash = h;
+    saveAdminCFG();
+  });
+  showNotif("✅ Password berhasil diubah","#00B894");
   ["cfg-pass-lama","cfg-pass-baru","cfg-pass-konfirm"].forEach(function(id){ var el=g(id);if(el)el.value=""; });
 }
 
@@ -644,335 +597,23 @@ function renderPengaturanPage(){
   mkLive("cfg-pos-base-url","preview-pos-link",true);
   mkLive("cfg-order-url","preview-order-link",false);
   mkLive("cfg-recruit-url","preview-recruit-link",false);
-  // Load payment info
-  loadPaymentInfo();
 }
-
-
-// ══ INFO PEMBAYARAN PENDAFTARAN ═══════════════════════════════════════════
-var _payBanks = []; // [{nama, norek, atas_nama}]
-var _payQrisImg = null; // base64
-var _payQrisNama = '';
-
-function renderBankPaymentRows() {
-  var el = document.getElementById('bank-payment-rows'); if (!el) return;
-  if (!_payBanks.length) {
-    el.innerHTML = '<div style="font-size:12px;color:var(--txt3);margin-bottom:8px">Belum ada rekening. Klik "+ Tambah Rekening".</div>';
-    return;
-  }
-  el.innerHTML = _payBanks.map(function(b, i) {
-    return '<div style="display:flex;gap:8px;align-items:start;margin-bottom:10px;padding:10px;background:var(--bg);border:1px solid var(--brd);border-radius:var(--radius)">' +
-      '<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
-        '<input class="fi pay-bank-nama" placeholder="Nama Bank (BCA, BRI...)" value="'+(b.nama||'')+'" style="font-size:12px">' +
-        '<input class="fi pay-bank-norek" placeholder="No. Rekening" value="'+(b.norek||'')+'" style="font-size:12px">' +
-        '<input class="fi pay-bank-an" placeholder="Atas Nama" value="'+(b.an||'')+'" style="font-size:12px;grid-column:1/-1">' +
-      '</div>' +
-      '<button class="btn btn-sm" style="color:var(--red-dk);flex-shrink:0;margin-top:2px" onclick="hapusBankPayment('+i+')">🗑️</button>' +
-    '</div>';
-  }).join('');
-}
-
-function tambahBankPayment() {
-  _payBanks.push({nama:'', norek:'', an:''});
-  renderBankPaymentRows();
-  // Focus nama field baru
-  var rows = document.querySelectorAll('#bank-payment-rows .pay-bank-nama');
-  if (rows.length) rows[rows.length-1].focus();
-}
-
-function hapusBankPayment(i) {
-  _payBanks.splice(i, 1);
-  renderBankPaymentRows();
-}
-
-function previewPayQris(input) {
-  var file = input.files && input.files[0]; if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    _payQrisImg = e.target.result;
-    var prev = document.getElementById('pay-qris-preview');
-    var img = document.getElementById('pay-qris-img');
-    if (prev) prev.style.display = 'block';
-    if (img) img.src = _payQrisImg;
-  };
-  reader.readAsDataURL(file);
-}
-
-function hapusPayQris() {
-  _payQrisImg = null;
-  var prev = document.getElementById('pay-qris-preview');
-  if (prev) prev.style.display = 'none';
-  var fi = document.getElementById('cfg-pay-qris-file');
-  if (fi) fi.value = '';
-}
-
-async function savePaymentInfo() {
-  // Kumpulkan data bank dari DOM
-  var rows = document.querySelectorAll('#bank-payment-rows > div');
-  _payBanks = Array.from(rows).map(function(row) {
-    return {
-      nama: (row.querySelector('.pay-bank-nama')||{value:''}).value.trim(),
-      norek: (row.querySelector('.pay-bank-norek')||{value:''}).value.trim(),
-      an: (row.querySelector('.pay-bank-an')||{value:''}).value.trim()
-    };
-  }).filter(function(b){ return b.nama || b.norek; });
-
-  var qrisNamaEl = document.getElementById('cfg-pay-qris-nama');
-  _payQrisNama = qrisNamaEl ? qrisNamaEl.value.trim() : '';
-
-  // Simpan ke localStorage
-  _adminCFG.payBanks = _payBanks;
-  _adminCFG.payQrisImg = _payQrisImg;
-  _adminCFG.payQrisNama = _payQrisNama;
-  saveAdminCFG();
-
-  // Sync ke Supabase system_config
-  if (_sb) {
-    try {
-      var configs = [
-        {key: 'payment_banks', value: JSON.stringify(_payBanks)},
-        {key: 'payment_qris_nama', value: _payQrisNama || ''},
-      ];
-      if (_payQrisImg) configs.push({key: 'payment_qris_img', value: _payQrisImg});
-      for (var i = 0; i < configs.length; i++) {
-        await _sb.from('system_config').upsert(configs[i], {onConflict: 'key'});
-      }
-      showNotif('✅ Info pembayaran tersimpan & tersync ke Supabase', '#00B894');
-    } catch(e) {
-      showNotif('Tersimpan lokal · Sync gagal: ' + e.message, '#F59E0B');
-    }
-  } else {
-    showNotif('✅ Info pembayaran disimpan (lokal)', '#00B894');
-  }
-}
-
-async function loadPaymentInfo() {
-  // Load dari localStorage dulu
-  if (_adminCFG.payBanks) _payBanks = _adminCFG.payBanks;
-  if (_adminCFG.payQrisImg) _payQrisImg = _adminCFG.payQrisImg;
-  if (_adminCFG.payQrisNama) _payQrisNama = _adminCFG.payQrisNama;
-
-  // Load dari Supabase (prioritas)
-  if (_sb) {
-    try {
-      var res = await _sb.from('system_config')
-        .select('key,value')
-        .in('key', ['payment_banks','payment_qris_img','payment_qris_nama']);
-      if (!res.error && res.data) {
-        res.data.forEach(function(r) {
-          if (r.key === 'payment_banks') {
-            try { _payBanks = JSON.parse(r.value)||[]; } catch(e){}
-          }
-          if (r.key === 'payment_qris_img') _payQrisImg = r.value || null;
-          if (r.key === 'payment_qris_nama') _payQrisNama = r.value || '';
-        });
-      }
-    } catch(e) { console.warn('loadPaymentInfo:', e.message); }
-  }
-  renderBankPaymentRows();
-  var qn = document.getElementById('cfg-pay-qris-nama');
-  if (qn) qn.value = _payQrisNama;
-  if (_payQrisImg) {
-    var prev = document.getElementById('pay-qris-preview');
-    var img = document.getElementById('pay-qris-img');
-    if (prev) prev.style.display = 'block';
-    if (img) img.src = _payQrisImg;
-  }
-}
-// ═════════════════════════════════════════════════════════════════════════
-
-var _realtimeChannel = null;
-var _pollInterval = null;
-var _lastLoadTime = 0;
 
 async function loadAll(){
   try{
     var r1=await _sb.from('plans').select('*').order('urutan');
-    var r2=await _sb.from('restaurants').select('*,cfg').order('created_at',{ascending:false});
+    var r2=await _sb.from('restaurants').select('*').order('created_at',{ascending:false});
     var r3=await _sb.from('subscriptions').select('*,plans(nama,harga)').order('created_at',{ascending:false});
     _plans=r1.data||[];_tokoData=r2.data||[];_subData=r3.data||[];
-    _lastLoadTime = Date.now();
     renderDashboard();renderTokoTable();renderSubTable();renderPaketCards();
     var opts='<option value="">-- Pilih Paket --</option>'+_plans.map(function(p){
       return '<option value="'+p.id+'">'+p.nama+' (Rp '+p.harga.toLocaleString('id-ID')+'/'+p.periode+')</option>';
     }).join('');
     ['t-plan','sub-plan'].forEach(function(id){var el=g(id);if(el)el.innerHTML=opts;});
-    updatePendingBadge();
-    // Set baseline counter untuk deteksi toko baru
-    _lastTokoCount = _tokoData.length;
-    _lastPendingCount = _tokoData.filter(function(t){return t.status==='pending';}).length;
-    // Mulai realtime + polling
-    startRealtimeAdmin();
-    startPolling(); // Selalu jalankan polling sebagai safety net
+    var pending=_tokoData.filter(function(t){return t.status==='pending';});
+    var badge=g('badge-pending');
+    if(badge){badge.textContent=pending.length;badge.style.display=pending.length>0?'inline':'none';}
   }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
-}
-
-function updatePendingBadge() {
-  var pending = _tokoData.filter(function(t){ return t.status==='pending'; });
-  var badge = g('badge-pending');
-  if (badge) { badge.textContent=pending.length; badge.style.display=pending.length>0?'inline':'none'; }
-}
-
-function startRealtimeAdmin() {
-  // Bersihkan channel lama jika ada
-  if (_realtimeChannel) {
-    try { _sb.removeChannel(_realtimeChannel); } catch(e){}
-    _realtimeChannel = null;
-  }
-  if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
-
-  // Realtime: dengarkan perubahan tabel restaurants & subscriptions
-  try {
-    _realtimeChannel = _sb.channel('admin-realtime')
-      .on('postgres_changes', {event:'*', schema:'public', table:'restaurants'}, function(payload) {
-        console.log('[Admin] Realtime restaurants:', payload.eventType);
-        handleRealtimeChange(payload, 'restaurants');
-      })
-      .on('postgres_changes', {event:'*', schema:'public', table:'subscriptions'}, function(payload) {
-        console.log('[Admin] Realtime subscriptions:', payload.eventType);
-        handleRealtimeChange(payload, 'subscriptions');
-      })
-      .subscribe(function(status) {
-        if (status === 'SUBSCRIBED') {
-          showRealtimeStatus('🟢 Live', 'var(--green-dk)');
-          // Tetap jalankan polling sebagai safety net (tiap 60 detik)
-          if (_pollInterval) clearInterval(_pollInterval);
-          _pollInterval = setInterval(refreshDataSilent, 60000);
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          showRealtimeStatus('🔄 Auto-refresh 15s', 'var(--amber-dk)');
-          startPolling();
-        }
-      });
-  } catch(e) {
-    console.warn('Realtime admin gagal, fallback ke polling:', e.message);
-    startPolling();
-  }
-}
-
-function showRealtimeStatus(label, color) {
-  var el = g('realtime-status');
-  if (!el) return;
-  el.textContent = label;
-  el.style.color = color;
-}
-
-async function manualRefresh() {
-  showRealtimeStatus('🔄 Memperbarui...', 'var(--accent)');
-  await refreshDataSilent();
-  // Reset countdown
-  _pollCountdown = 15;
-}
-
-var _realtimePending = {}; // debounce agar tidak flood
-
-function handleRealtimeChange(payload, table) {
-  // Debounce: tunggu 500ms sebelum reload
-  var key = table;
-  if (_realtimePending[key]) clearTimeout(_realtimePending[key]);
-  _realtimePending[key] = setTimeout(function() {
-    delete _realtimePending[key];
-    refreshDataSilent();
-  }, 500);
-}
-
-var _lastTokoCount = 0;
-var _lastPendingCount = 0;
-
-async function refreshDataSilent() {
-  try {
-    var r2 = await _sb.from('restaurants').select('*,cfg').order('created_at',{ascending:false});
-    var r3 = await _sb.from('subscriptions').select('*,plans(nama,harga)').order('created_at',{ascending:false});
-
-    var newTokoData = r2.data||[];
-    var newSubData  = r3.data||[];
-
-    // Deteksi toko baru masuk
-    var newCount = newTokoData.length;
-    var newPending = newTokoData.filter(function(t){return t.status==='pending';}).length;
-    if (_lastTokoCount > 0 && newCount > _lastTokoCount) {
-      var diff = newCount - _lastTokoCount;
-      showNotif('🆕 ' + diff + ' toko baru mendaftar!', '#6C5CE7');
-      // Jika di halaman lain, tambah visual indicator
-      var badge = g('badge-pending');
-      if (badge) { badge.style.animation = 'none'; setTimeout(function(){ badge.style.animation=''; }, 100); }
-    }
-    if (_lastPendingCount > 0 && newPending > _lastPendingCount) {
-      showNotif('⏳ Ada pendaftaran baru menunggu aktivasi', '#F59E0B');
-    }
-
-    _lastTokoCount  = newCount;
-    _lastPendingCount = newPending;
-    _tokoData = newTokoData;
-    _subData  = newSubData;
-
-    renderDashboard();
-    renderTokoTable();
-    renderSubTable();
-    updatePendingBadge();
-    checkForceLogoutCleared();
-
-    var now = new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    // Jika realtime aktif tampilkan Live, jika tidak tampilkan waktu update
-    var isLive = _realtimeChannel !== null;
-    showRealtimeStatus(
-      isLive ? '🟢 Live · ' + now : '🔄 Updated ' + now,
-      isLive ? 'var(--green-dk)' : 'var(--blue-dk)'
-    );
-  } catch(e) {
-    console.warn('refreshDataSilent:', e.message);
-    showRealtimeStatus('⚠️ Gagal update', 'var(--red-dk)');
-  }
-}
-
-// Polling — selalu aktif sebagai safety net (tiap 15 detik)
-var _pollCountdown = 15;
-var _countdownTimer = null;
-
-function startPolling() {
-  if (_pollInterval) clearInterval(_pollInterval);
-  if (_countdownTimer) clearInterval(_countdownTimer);
-
-  _pollCountdown = 15;
-  _pollInterval = setInterval(function() {
-    _pollCountdown = 15;
-    refreshDataSilent();
-  }, 15000);
-
-  // Countdown visual tiap detik
-  _countdownTimer = setInterval(function() {
-    _pollCountdown = Math.max(0, _pollCountdown - 1);
-    var statusEl = g('realtime-status');
-    if (statusEl && statusEl.textContent.includes('Polling')) {
-      statusEl.textContent = '🔄 Auto-refresh dalam ' + _pollCountdown + 's';
-    }
-  }, 1000);
-
-  showRealtimeStatus('🔄 Auto-refresh dalam 15s', 'var(--amber-dk)');
-}
-
-function stopPolling() {
-  if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
-  if (_countdownTimer) { clearInterval(_countdownTimer); _countdownTimer = null; }
-}
-
-// Cek force_logout yang sudah di-clear oleh kasir (sudah logout)
-async function checkForceLogoutCleared() {
-  var forced = _tokoData.filter(function(t){ return t.force_logout; });
-  if (!forced.length) return;
-  for (var i = 0; i < forced.length; i++) {
-    var t = forced[i];
-    // Cek apakah sudah di-clear dari sistem
-    try {
-      var r = await _sb.from('restaurants').select('force_logout').eq('id', t.id).single();
-      if (!r.error && r.data && !r.data.force_logout) {
-        // Sudah di-clear — update lokal dan hapus badge
-        var local = _tokoData.find(function(x){ return x.id===t.id; });
-        if (local) { local.force_logout = false; local.logout_reason = ''; }
-        showNotif('✅ Toko ' + t.nama + ' sudah logout', '#00B894');
-        renderTokoTable();
-      }
-    } catch(e) {}
-  }
 }
 function renderDashboard(){
   var now=new Date();var in7=new Date(now);in7.setDate(in7.getDate()+7);
@@ -1043,7 +684,7 @@ function renderTokoTable(){
     return ss===_tokoFilter||t.status===_tokoFilter;
   });
   var tbody=g('toko-tbody');
-  if(!data.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--txt3)">Tidak ada toko</td></tr>';return;}
+  if(!data.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--txt3)">Tidak ada toko</td></tr>';return;}
   var now2=new Date();
   tbody.innerHTML=data.map(function(t){
     var sub=_subData.find(function(s){return s.restaurant_id===t.id;});
@@ -1059,30 +700,14 @@ function renderTokoTable(){
     return '<tr>'+
       '<td>' +
           '<div style="font-weight:700;display:flex;align-items:center;gap:6px">'+(t.logo||'🏪')+' '+t.nama+
-          (t.force_logout ? ' <span onclick="cancelForceLogout(\'' + t.id + '\')" style="background:#7C3AED;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;cursor:pointer" title="' + (t.logout_reason||'') + '">⚡ Pending ✕</span>' : '') +
-          '</div><div style="font-size:11px;color:var(--txt2)">'+(t.alamat||'-')+'</div>' +
+          (t.force_logout ? ' <span onclick="cancelForceLogout(\'' + t.id + '\')" style="background:#7C3AED;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;cursor:pointer" title="' + (escHtml(t.logout_reason||'')) + '">⚡ Pending ✕</span>' : '') +
+          '</div><div style="font-size:11px;color:var(--txt2)">'+escHtml(t.alamat||'-')+'</div>' +
           '</td>'+
       '<td><div>'+(t.owner_nama||'-')+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.owner_hp||'-')+'</div></td>'+
-      '<td>'+planNama+'</td>'+
-      '<td>'+(sb2[ss]||ss)+'</td>'+
-      '<td>'+selesai+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari</div>':'')+'</td>'+
-      '<td style="font-size:11px;color:var(--txt2)">' + (function(){
-        var cfg = t.cfg || {};
-        if (!cfg.lastAccess) return '<span style="color:var(--txt3)">—</span>';
-        var d = new Date(cfg.lastAccess);
-        var diff = Date.now() - d.getTime();
-        var mins = Math.floor(diff/60000);
-        var hrs = Math.floor(mins/60);
-        var days = Math.floor(hrs/24);
-        var kasir = cfg.lastKasir || '';
-        var timeStr = days>0 ? days+'h lalu' : hrs>0 ? hrs+'j lalu' : mins>0 ? mins+'m lalu' : 'baru saja';
-        return '<div style="font-weight:600;color:' + (mins<60?'var(--green-dk)':mins<1440?'var(--blue-dk)':'var(--txt2)') + '">' + timeStr + '</div>' +
-               (kasir ? '<div style="color:var(--txt3)">👤 ' + kasir + '</div>' : '');
-      })() + '</td>'+
-      '<td><div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">'+
+      '<td>'+planNama+'</td>'+(sb2[ss]||ss)+'<td>'+selesai+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari</div>':'')+'</td>'+
+      '<td><div style="display:flex;gap:4px">'+
         '<button class="btn btn-sm" onclick="editToko(this.dataset.id)" data-id="'+tid+'">✏️</button>'+
-        (t.bukti_bayar ? '<button class="btn btn-sm" style="background:var(--amber);color:#fff" onclick="lihatBukti(this.dataset.id)" data-id="'+tid+'" title="Lihat bukti bayar">📸 Bukti</button>' : '')+
-        '<button class="btn btn-sm btn-primary" onclick="editSub(this.dataset.id)" data-id="'+tid+'" title="Edit Langganan">📋</button>'+
+        '<button class="btn btn-sm btn-primary" onclick="editSub(this.dataset.id)" data-id="'+tid+'">📋 Sub</button>'+
         '<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="copyPosLink(this.dataset.id)" data-id="'+tid+'" title="Copy link POS">🔗 Link</button>'+
         '<button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="kirimLinkWA(this.dataset.id, \'' + (t.owner_hp||'') + '\')" data-id="'+tid+'" title="Kirim via WA">💬</button>'+
         '<button class="btn btn-sm" style="color:var(--red-dk)" onclick="hapusToko(this.dataset.id)" data-id="'+tid+'">🗑️</button>'+
@@ -1132,11 +757,8 @@ function buildFiturGrid(containerId,values){
   var el=g(containerId);if(!el)return;
   el.innerHTML=FITUR_LIST.map(function(f){
     var on=values&&values[f.key];
-    // FIX: gunakan onchange di input (bukan onclick di label) agar .checked sudah ter-update saat event jalan
-    return '<label class="feat-item '+(on?'on':'')+'">'+
-      '<input type="checkbox" '+(on?'checked':'')+' data-key="'+f.key+'"'+
-      ' onchange="this.closest(\'.feat-item\').classList.toggle(\'on\',this.checked)">'+
-      f.label+'</label>';
+    return '<label class="feat-item '+(on?'on':'')+'" onclick="this.classList.toggle(\'on\',this.querySelector(\'input\').checked)">'+
+      '<input type="checkbox" '+(on?'checked':'')+' data-key="'+f.key+'">'+f.label+'</label>';
   }).join('');
 }
 function getFiturFromGrid(containerId){
@@ -1198,217 +820,81 @@ async function simpanToko(){
   }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
 function closeTambahToko(){g('modal-toko').classList.remove('open');}
-function lihatBukti(tokoId) {
-  var toko = _tokoData.find(function(t){ return t.id===tokoId; });
-  if (!toko || !toko.bukti_bayar) { showNotif('Tidak ada bukti pembayaran untuk toko ini', '#F59E0B'); return; }
-
-  // Buat modal preview bukti
-  var existing = document.getElementById('bukti-modal-overlay');
-  if (existing) existing.remove();
-
-  var overlay = document.createElement('div');
-  overlay.id = 'bukti-modal-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-  overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
-
-  var modal = document.createElement('div');
-  modal.style.cssText = 'background:#fff;border-radius:16px;padding:20px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto';
-
-  var header = document.createElement('div');
-  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
-  var titleDiv = document.createElement('div');
-  titleDiv.innerHTML = '<div style="font-size:15px;font-weight:800">📸 Bukti Pembayaran</div>'
-    + '<div style="font-size:12px;color:#666;margin-top:2px">'+toko.nama+'</div>';
-  var closeBtn = document.createElement('button');
-  closeBtn.textContent = '✕ Tutup';
-  closeBtn.style.cssText = 'background:#eee;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:700';
-  closeBtn.onclick = function(){ overlay.remove(); };
-  header.appendChild(titleDiv);
-  header.appendChild(closeBtn);
-
-  var img = document.createElement('img');
-  img.src = toko.bukti_bayar;
-  img.style.cssText = 'width:100%;border-radius:10px;border:1px solid #e5e7eb;display:block';
-  img.alt = 'Bukti pembayaran '+toko.nama;
-
-  var info = document.createElement('div');
-  info.style.cssText = 'margin-top:12px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;color:#555';
-  var tgl = toko.created_at ? new Date(toko.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
-  var sub = _subData.find(function(s){return s.restaurant_id===tokoId;});
-  var planNama = sub&&sub.plans ? sub.plans.nama : '-';
-  info.innerHTML = '<b>Nama Toko:</b> '+toko.nama+'<br>'
-    +'<b>Owner:</b> '+( toko.owner_nama||'-')+' · '+(toko.owner_hp||'-')+'<br>'
-    +'<b>Paket:</b> '+planNama+'<br>'
-    +'<b>Daftar:</b> '+tgl+'<br>'
-    +'<b>Status:</b> '+toko.status;
-
-  var actions = document.createElement('div');
-  actions.style.cssText = 'display:flex;gap:8px;margin-top:12px';
-
-  var btnApprove = document.createElement('button');
-  btnApprove.textContent = '✅ Aktivasi Toko';
-  btnApprove.style.cssText = 'flex:1;padding:10px;background:var(--green);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px';
-  btnApprove.onclick = function() { aktivasiToko(tokoId, toko.nama); overlay.remove(); };
-
-  var btnDownload = document.createElement('a');
-  btnDownload.href = toko.bukti_bayar;
-  btnDownload.download = 'bukti-' + (toko.nama||'toko').split(' ').join('-') + '.jpg';
-  btnDownload.textContent = '⬇️ Unduh';
-  btnDownload.style.cssText = 'flex:1;padding:10px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;text-align:center;text-decoration:none;color:#333';
-
-  actions.appendChild(btnApprove);
-  actions.appendChild(btnDownload);
-
-  modal.appendChild(header);
-  modal.appendChild(img);
-  modal.appendChild(info);
-  modal.appendChild(actions);
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-}
-
-async function aktivasiToko(tokoId, namaKonfirm) {
-  var res = await _sb.from('subscriptions').update({status:'active'}).eq('restaurant_id', tokoId);
-  var res2 = await _sb.from('restaurants').update({status:'active'}).eq('id', tokoId);
-  if (res.error || res2.error) {
-    showNotif('❌ Gagal aktivasi: '+((res.error||res2.error).message), '#EF4444'); return;
-  }
-  showNotif('✅ Toko '+namaKonfirm+' diaktifkan!', '#00B894');
-  await refreshDataSilent();
-}
-
 async function hapusToko(tokoId){
-  var toko = _tokoData.find(function(t){ return t.id===tokoId; });
-  var namaKonfirm = toko ? toko.nama : 'toko ini';
-  if (!confirm('⚠️ Hapus toko "' + namaKonfirm + '" secara permanen?\n\nSemua data (menu, transaksi, langganan, user) ikut terhapus.')) return;
-
-  showNotif('⏳ Menghapus ' + namaKonfirm + '...', '#6C5CE7');
-
-  try {
-    // Hapus semua child tables dulu (CASCADE seharusnya handle ini,
-    // tapi kita hapus manual juga agar RLS tidak jadi masalah)
-    var tables = ['subscriptions','users','menus','transactions','expenses','online_orders','shifts','members'];
-    for (var i = 0; i < tables.length; i++) {
-      await _sb.from(tables[i]).delete().eq('restaurant_id', tokoId);
-      // Abaikan error — mungkin tabel tidak punya kolom restaurant_id atau sudah kosong
-    }
-
-    // Hapus toko utama
-    var res = await _sb.from('restaurants').delete().eq('id', tokoId);
-
-    if (res.error) {
-      // Jika masih gagal karena FK, force-hapus dengan update status = deleted dulu
-      // lalu coba hapus lagi
-      await _sb.from('restaurants').update({
-        status: 'deleted',
-        nama: '[DIHAPUS]',
-        owner_nama: null,
-        owner_hp: null,
-        owner_email: null,
-        bukti_bayar: null
-      }).eq('id', tokoId);
-
-      // Coba hapus sekali lagi setelah anak-anaknya dibersihkan
-      var res2 = await _sb.from('restaurants').delete().eq('id', tokoId);
-      if (res2.error) {
-        // Worst case: toko sudah di-blank, sembunyikan dari UI
-        _tokoData = _tokoData.filter(function(t){ return t.id!==tokoId; });
-        _subData  = _subData.filter(function(s){ return s.restaurant_id!==tokoId; });
-        renderDashboard(); renderTokoTable(); renderSubTable(); updatePendingBadge();
-        showNotif('✅ Toko dihapus dari tampilan (data database akan dibersihkan otomatis)', '#00B894');
-        return;
-      }
-    }
-
-    // Sukses — update lokal
-    _tokoData = _tokoData.filter(function(t){ return t.id!==tokoId; });
-    _subData  = _subData.filter(function(s){ return s.restaurant_id!==tokoId; });
-    renderDashboard(); renderTokoTable(); renderSubTable(); updatePendingBadge();
-    showNotif('✅ Toko ' + namaKonfirm + ' berhasil dihapus', '#00B894');
-
-  } catch(e) {
-    showNotif('❌ Gagal: ' + (e.message||e), '#EF4444');
-    console.error('hapusToko:', e);
+  if(!confirm('Hapus toko ini?'))return;
+  try{await _sb.from('subscriptions').delete().eq('restaurant_id',tokoId);
+    await _sb.from('restaurants').delete().eq('id',tokoId);
+    showNotif('✅ Toko dihapus','#00B894');await loadAll();}catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
+}
+function editSub(tokoId){
+  var toko=_tokoData.find(function(t){return t.id===tokoId;});
+  var sub=_subData.find(function(s){return s.restaurant_id===tokoId;});
+  if(!toko)return;
+  g('sub-edit-id').value=tokoId;g('sub-toko-nama').value=toko.nama;
+  if(sub){
+    g('sub-plan').value=sub.plan_id||'';g('sub-status').value=sub.status||'trial';
+    g('sub-mulai').value=sub.mulai||'';g('sub-selesai').value=sub.selesai||'';
+    g('sub-catatan').value=sub.catatan||'';
+    var fi=sub.fitur_override;if(typeof fi==='string'){try{fi=JSON.parse(fi);}catch(e){fi={};}}
+    buildFiturGrid('sub-fitur-grid',fi||{});
+  }else{
+    var today=new Date().toISOString().substring(0,10);
+    var in14=new Date();in14.setDate(in14.getDate()+14);
+    g('sub-plan').value=_plans.length?_plans[0].id:'';g('sub-status').value='trial';
+    g('sub-mulai').value=today;g('sub-selesai').value=in14.toISOString().substring(0,10);
+    buildFiturGrid('sub-fitur-grid',{});
   }
+  g('modal-sub').classList.add('open');
 }
-
-
-// ══════════════════════════════════════════════════════════════
-// PAKET CRUD
-// ══════════════════════════════════════════════════════════════
-function showTambahPaket() {
-  g('modal-paket-title').textContent = '💎 Tambah Paket';
-  g('paket-edit-id').value = '';
-  ['p-nama','p-badge','p-harga','p-desc'].forEach(function(id){var el=g(id);if(el)el.value='';});
-  var periodeEl = g('p-periode'); if (periodeEl) periodeEl.value = 'bulan';
-  buildFiturGrid('paket-fitur-grid', {});
-  g('modal-paket').classList.add('open');
+function updateSubFitur(){
+  var planId=g('sub-plan').value;var plan=_plans.find(function(p){return p.id===planId;});
+  if(plan)buildFiturGrid('sub-fitur-grid',plan.fitur||{});
 }
-
-function editPaket(planId) {
-  var plan = _plans.find(function(p){ return p.id === planId; });
-  if (!plan) return;
-  g('modal-paket-title').textContent = '✏️ Edit Paket';
-  g('paket-edit-id').value = planId;
-  var n=g('p-nama'); if(n) n.value = plan.nama||'';
-  var b=g('p-badge'); if(b) b.value = plan.badge||'';
-  var h=g('p-harga'); if(h) h.value = plan.harga||0;
-  var pr=g('p-periode'); if(pr) pr.value = plan.periode||'bulan';
-  var d=g('p-desc'); if(d) d.value = plan.deskripsi||'';
-  // Load fitur — parse jika string JSON
-  var fitur = plan.fitur || {};
-  if (typeof fitur === 'string') { try { fitur = JSON.parse(fitur); } catch(e) { fitur = {}; } }
-  buildFiturGrid('paket-fitur-grid', fitur);
-  g('modal-paket').classList.add('open');
+async function simpanSub(){
+  var tokoId=g('sub-edit-id').value;var planId=g('sub-plan').value;
+  if(!planId){showNotif('Pilih paket','#EF4444');return;}
+  var payload={restaurant_id:tokoId,plan_id:planId,status:g('sub-status').value,
+    mulai:g('sub-mulai').value,selesai:g('sub-selesai').value,
+    catatan:g('sub-catatan').value,fitur_override:getFiturFromGrid('sub-fitur-grid'),
+    updated_at:new Date().toISOString()};
+  try{
+    var existing=_subData.find(function(s){return s.restaurant_id===tokoId;});
+    if(existing){await _sb.from('subscriptions').update(payload).eq('id',existing.id);}
+    else{await _sb.from('subscriptions').insert(payload);}
+    g('modal-sub').classList.remove('open');showNotif('✅ Langganan diperbarui','#00B894');await loadAll();
+  }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
-
-async function simpanPaket() {
-  var editId = (g('paket-edit-id')||{value:''}).value;
-  var nama   = (g('p-nama')||{value:''}).value.trim();
-  var badge  = (g('p-badge')||{value:''}).value.trim();
-  var harga  = parseFloat((g('p-harga')||{value:'0'}).value)||0;
-  var periode= (g('p-periode')||{value:'bulan'}).value;
-  var desc   = (g('p-desc')||{value:''}).value.trim();
-  var fitur  = getFiturFromGrid('paket-fitur-grid');
-
-  if (!nama) { showNotif('Nama paket wajib diisi', '#EF4444'); return; }
-
-  var payload = {
-    nama: nama,
-    badge: badge||null,
-    harga: harga,
-    periode: periode,
-    deskripsi: desc,
-    fitur: fitur,
-    urutan: editId ? undefined : (_plans.length + 1)
-  };
-  // Hapus key undefined
-  Object.keys(payload).forEach(function(k){ if(payload[k]===undefined) delete payload[k]; });
-
-  try {
-    var res;
-    if (editId) {
-      res = await _sb.from('plans').update(payload).eq('id', editId);
-    } else {
-      res = await _sb.from('plans').insert(payload);
-    }
-    if (res.error) { showNotif('❌ ' + res.error.message, '#EF4444'); return; }
-    showNotif('✅ Paket ' + nama + ' disimpan', '#00B894');
-    g('modal-paket').classList.remove('open');
-    await loadAll();
-  } catch(e) { showNotif('❌ ' + (e.message||e), '#EF4444'); }
+function showTambahPaket(){
+  g('modal-paket-title').textContent='💎 Tambah Paket';g('paket-edit-id').value='';
+  ['p-nama','p-badge','p-desc'].forEach(function(id){g(id).value='';});
+  g('p-harga').value=0;g('p-periode').value='bulan';
+  buildFiturGrid('paket-fitur-grid',{});g('modal-paket').classList.add('open');
 }
-
+function editPaket(planId){
+  var plan=_plans.find(function(p){return p.id===planId;});if(!plan)return;
+  g('modal-paket-title').textContent='✏️ Edit: '+plan.nama;g('paket-edit-id').value=planId;
+  g('p-nama').value=plan.nama||'';g('p-badge').value=plan.badge||'';
+  g('p-harga').value=plan.harga||0;g('p-periode').value=plan.periode||'bulan';
+  g('p-desc').value=plan.deskripsi||'';
+  var fi=plan.fitur;if(typeof fi==='string'){try{fi=JSON.parse(fi);}catch(e){fi={};}}
+  buildFiturGrid('paket-fitur-grid',fi||{});g('modal-paket').classList.add('open');
+}
+async function simpanPaket(){
+  var planId=g('paket-edit-id').value;var nama=g('p-nama').value.trim();
+  if(!nama){showNotif('Nama wajib','#EF4444');return;}
+  var payload={nama:nama,badge:g('p-badge').value.trim()||null,harga:parseInt(g('p-harga').value)||0,
+    periode:g('p-periode').value,deskripsi:g('p-desc').value.trim(),
+    fitur:getFiturFromGrid('paket-fitur-grid'),aktif:true};
+  try{
+    if(planId){await _sb.from('plans').update(payload).eq('id',planId);}
+    else{await _sb.from('plans').insert(payload);}
+    g('modal-paket').classList.remove('open');showNotif('✅ Paket disimpan','#00B894');await loadAll();
+  }catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
+}
 async function hapusPaket(planId){
-  if(!confirm('Hapus paket ini?'))return;
-  var res = await _sb.from('plans').delete().eq('id',planId);
-  if (res.error) {
-    showNotif('❌ Gagal hapus paket: ' + res.error.message, '#EF4444');
-    console.error('hapusPaket:', res.error);
-    return;
-  }
-  showNotif('✅ Paket dihapus', '#00B894');
-  await loadAll();
+  if(!confirm('Hapus paket?'))return;
+  try{await _sb.from('plans').delete().eq('id',planId);showNotif('✅ Dihapus','#00B894');await loadAll();}
+  catch(e){showNotif('Gagal: '+e.message,'#EF4444');}
 }
 
 </script>
