@@ -555,21 +555,6 @@ async function savePengaturanAdmin(){
   POS_BASE_URL = url || POS_BASE_URL;
   saveAdminCFG();
   updatePreviewLink();
-  // Load info pembayaran
-  var nbEl = document.getElementById('cfg-nama-bank');
-  var rkEl = document.getElementById('cfg-rekening');
-  var anEl = document.getElementById('cfg-atas-nama');
-  var qnEl = document.getElementById('cfg-qris-nama');
-  if (nbEl) nbEl.value = _adminCFG.namaBank || '';
-  if (rkEl) rkEl.value = _adminCFG.rekening || '';
-  if (anEl) anEl.value = _adminCFG.atasNama || '';
-  if (qnEl) qnEl.value = _adminCFG.qrisNama || '';
-  if (_adminCFG.qrisImg) {
-    var savedImg  = document.getElementById('qris-saved-img');
-    var savedWrap = document.getElementById('qris-saved-wrap');
-    if (savedImg)  savedImg.src = _adminCFG.qrisImg;
-    if (savedWrap) savedWrap.style.display = 'block';
-  }
   // Sync to Supabase system_config
   if (_sb) {
     var configs = [];
@@ -628,6 +613,42 @@ function nav(p){
   if(p==='dashboard')renderDashboard();
   if(p==='pengaturan')renderPengaturanPage();
 }
+async function loadInfoPembayaran() {
+  // Coba load dari Supabase terlebih dahulu (sumber kebenaran)
+  if (_sb) {
+    try {
+      var keys = ['nama_bank','rekening','atas_nama','qris_nama','qris_img'];
+      var res = await _sb.from('system_config').select('key,value').in('key', keys);
+      if (res.data && res.data.length) {
+        var map = {};
+        res.data.forEach(function(r){ map[r.key] = r.value; });
+        // Sync ke _adminCFG
+        if (map.nama_bank)  _adminCFG.namaBank  = map.nama_bank;
+        if (map.rekening)   _adminCFG.rekening   = map.rekening;
+        if (map.atas_nama)  _adminCFG.atasNama   = map.atas_nama;
+        if (map.qris_nama)  _adminCFG.qrisNama   = map.qris_nama;
+        if (map.qris_img)   _adminCFG.qrisImg    = map.qris_img;
+        saveAdminCFG(); // cache ke localStorage
+      }
+    } catch(e) {}
+  }
+  // Tampilkan ke form
+  var nbEl = document.getElementById('cfg-nama-bank');
+  var rkEl = document.getElementById('cfg-rekening');
+  var anEl = document.getElementById('cfg-atas-nama');
+  var qnEl = document.getElementById('cfg-qris-nama');
+  if (nbEl) nbEl.value = _adminCFG.namaBank || '';
+  if (rkEl) rkEl.value = _adminCFG.rekening || '';
+  if (anEl) anEl.value = _adminCFG.atasNama || '';
+  if (qnEl) qnEl.value = _adminCFG.qrisNama || '';
+  if (_adminCFG.qrisImg) {
+    var si = document.getElementById('qris-saved-img');
+    var sw = document.getElementById('qris-saved-wrap');
+    if (si) si.src = _adminCFG.qrisImg;
+    if (sw) sw.style.display = 'block';
+  }
+}
+
 function previewQRIS(input) {
   var file = input.files && input.files[0];
   if (!file) return;
