@@ -840,17 +840,17 @@ function renderTokoTable(){
   var data=_tokoData.filter(function(t){
     if(_tokoSearch&&!(t.nama||'').toLowerCase().includes(_tokoSearch))return false;
     var sub=_subData.find(function(s){return s.restaurant_id===t.id;});
-    var ss=sub?(new Date(sub.selesai)<now&&sub.status!=='active'?'expired':sub.status):'none';
+    var ss=sub?(new Date(sub.selesai)<now&&sub.status!=='active'?'expired':sub.status):(t.status==='pending'?'pending':'none');
     if(_tokoFilter==='all')return true;
     return ss===_tokoFilter||t.status===_tokoFilter;
   });
   var tbody=g('toko-tbody');
-  if(!data.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--txt3)">Tidak ada toko</td></tr>';return;}
+  if(!data.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--txt3)">Tidak ada toko</td></tr>';return;}
   var now2=new Date();
   tbody.innerHTML=data.map(function(t){
     var sub=_subData.find(function(s){return s.restaurant_id===t.id;});
     var planNama=sub&&sub.plans?sub.plans.nama:'-';
-    var ss=sub?sub.status:'none';
+    var ss=sub?sub.status:(t.status==='pending'?'pending':'none');
     if(sub&&sub.selesai&&new Date(sub.selesai)<now2)ss='expired';
     var selesai=sub&&sub.selesai?new Date(sub.selesai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'';
     var sisa=sub&&sub.selesai?Math.ceil((new Date(sub.selesai)-now2)/86400000):0;
@@ -872,7 +872,7 @@ function renderTokoTable(){
           +(hasBukti?'<div style="margin-top:3px"><button class="bbukti" data-tid="'+t.id+'" style="font-size:9px;padding:1px 8px;background:#74b9ff;color:#fff;border:none;border-radius:10px;cursor:pointer">Bukti</button></div>':'')+
       '</td>'+
       '<td><div>'+(t.owner_nama||'-')+'</div><div style="font-size:11px;color:var(--txt2)">'+(t.owner_hp||'-')+'</div></td>'+
-      '<td>'+planNama+'</td>'+(sb2[ss]||ss)+'<td>'+selesai+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari</div>':'')+'</td>'+
+      '<td>'+planNama+'</td>'+'<td>'+(sb2[ss]||ss)+'</td>'+'<td>'+selesai+(sisa>0&&sisa<=7?'<div style="font-size:10px;color:var(--amber-dk)">'+sisa+' hari</div>':'')+'</td>'+
       '<td style="font-size:10px;color:var(--txt2)">'+lastActive+'</td>'+'<td><div style="display:flex;gap:4px">'+
         '<button class="btn btn-sm" onclick="editToko(this.dataset.id)" data-id="'+tid+'">✏️</button>'+
         '<button class="btn btn-sm btn-primary" onclick="editSub(this.dataset.id)" data-id="'+tid+'">📋 Sub</button>'+
