@@ -564,8 +564,13 @@ async function savePengaturanAdmin(){
     if (url) configs.push({key:"pos_base_url", value:url});
     if (configs.length) {
       try {
+        var passHash2 = _adminCFG.adminPassHash || '';
         for (var i=0; i<configs.length; i++) {
-          await _sb.from("system_config").upsert(configs[i], {onConflict:"key"});
+          await _sb.rpc('upsert_system_config', {
+            p_key: configs[i].key,
+            p_value: configs[i].value,
+            p_pass_hash: passHash2
+          });
         }
         showNotif("✅ Pengaturan tersimpan & tersync ke Supabase","#00B894");
       } catch(e) { showNotif("✅ Tersimpan lokal (sync gagal: "+e.message+")","#F59E0B"); }
@@ -693,6 +698,8 @@ async function simpanInfoPembayaran() {
 
   if (_sb) {
     try {
+      // Pakai RPC function yang verifikasi password admin dulu
+      var passHash = _adminCFG.adminPassHash || '';
       var configs = [
         {key:'nama_bank',  value: namaBank},
         {key:'rekening',   value: rekening},
@@ -700,15 +707,25 @@ async function simpanInfoPembayaran() {
         {key:'qris_nama',  value: qrisNama},
         {key:'qris_img',   value: qrisImg||''},
       ];
+      var failed = false;
       for (var i = 0; i < configs.length; i++) {
-        await _sb.from('system_config').upsert(configs[i], {onConflict:'key'});
+        var r = await _sb.rpc('upsert_system_config', {
+          p_key: configs[i].key,
+          p_value: configs[i].value,
+          p_pass_hash: passHash
+        });
+        if (r.error || (r.data && !r.data.ok)) {
+          failed = true;
+          showNotif('❌ Gagal sync: '+(r.error?r.error.message:(r.data&&r.data.error)||'unknown'),'#EF4444');
+          break;
+        }
       }
-      showNotif('✅ Info pembayaran tersimpan & tersync','#00B894');
+      if (!failed) showNotif('✅ Info pembayaran tersimpan & tersync','#00B894');
     } catch(e) {
-      showNotif('✅ Tersimpan lokal (sync gagal: '+e.message+')','#F59E0B');
+      showNotif('Tersimpan lokal, sync gagal: '+e.message,'#F59E0B');
     }
   } else {
-    showNotif('✅ Info pembayaran disimpan','#00B894');
+    showNotif('✅ Info pembayaran disimpan (offline)','#00B894');
   }
 }
 
@@ -737,6 +754,8 @@ function renderPengaturanPage(){
   mkLive("cfg-pos-base-url","preview-pos-link",true);
   mkLive("cfg-order-url","preview-order-link",false);
   mkLive("cfg-recruit-url","preview-recruit-link",false);
+  // Load info pembayaran dari Supabase
+  loadInfoPembayaran();
 }
 
 async function loadAll(){
