@@ -861,8 +861,14 @@ function renderTokoTable(){
     var hasBukti=!!(t.bukti_bayar);
     var lastActive='-';
     try{
-      var _la=t.updated_at?new Date(t.updated_at):null;
-      if(_la){var _dh=Math.round((Date.now()-_la.getTime())/3600000);lastActive=_dh<1?'Baru saja':_dh<24?_dh+'j lalu':Math.round(_dh/24)+'h lalu';}
+      // cfg.lastAccess diisi oleh POS setiap kali kasir login
+      var _laStr = (t.cfg&&t.cfg.lastAccess) ? t.cfg.lastAccess : t.updated_at;
+      var _la = _laStr ? new Date(_laStr) : null;
+      if(_la && !isNaN(_la)){
+        var _dh=Math.round((Date.now()-_la.getTime())/3600000);
+        lastActive=_dh<1?'Baru saja':_dh<24?_dh+'j lalu':Math.round(_dh/24)+'h lalu';
+        if(_dh<1 && t.cfg&&t.cfg.lastKasir) lastActive+=' ('+escHtml(t.cfg.lastKasir)+')';
+      }
     }catch(_e){}
     return '<tr>'+
       '<td>' +
