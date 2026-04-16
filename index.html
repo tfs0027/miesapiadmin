@@ -180,10 +180,11 @@ textarea.fi{resize:vertical;min-height:70px}
         <div><div class="page-title">📊 Dashboard</div><div class="page-sub">Ringkasan sistem WarungKu</div></div>
         <button class="btn btn-sm" onclick="loadAll()">🔄 Refresh</button>
       </div>
-      <div class="g3" id="dash-metrics">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="dash-metrics">
         <div class="metric"><div class="metric-val" id="m-toko">-</div><div class="metric-lbl">Total Toko</div></div>
-        <div class="metric"><div class="metric-val" id="m-aktif">-</div><div class="metric-lbl">Aktif / Trial</div></div>
-        <div class="metric"><div class="metric-val" id="m-expired">-</div><div class="metric-lbl">Expired</div></div>
+        <div class="metric"><div class="metric-val" id="m-aktif" style="color:var(--green-dk)">-</div><div class="metric-lbl">Aktif / Trial</div></div>
+        <div class="metric"><div class="metric-val" id="m-pending" style="color:var(--amber-dk)">-</div><div class="metric-lbl">Pending</div></div>
+        <div class="metric"><div class="metric-val" id="m-expired" style="color:var(--red-dk)">-</div><div class="metric-lbl">Expired</div></div>
       </div>
       <div class="g2">
         <div class="card">
@@ -279,6 +280,46 @@ textarea.fi{resize:vertical;min-height:70px}
           </div>
           <button class="btn btn-primary" style="width:100%" onclick="savePengaturanAdmin()">💾 Simpan</button>
         </div>
+
+        <div class="card">
+          <div class="card-hd"><span class="card-title">💳 Info Pembayaran</span></div>
+          <div style="font-size:12px;color:var(--txt2);margin-bottom:12px;line-height:1.7">
+            Ditampilkan otomatis di halaman registrasi toko baru saat memilih paket berbayar.
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">🏦 Nama Bank</label>
+            <input class="fi" id="cfg-nama-bank" placeholder="BCA / BRI / Mandiri / dll">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">💰 Nomor Rekening</label>
+            <input class="fi" id="cfg-rekening" placeholder="1234567890">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">👤 Atas Nama</label>
+            <input class="fi" id="cfg-atas-nama" placeholder="WarungKu Indonesia">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">📱 QRIS (upload gambar)</label>
+            <input type="file" id="cfg-qris-file" accept="image/*" style="display:none" onchange="previewQRIS(this)">
+            <label for="cfg-qris-file" style="display:block;padding:10px;text-align:center;border:1.5px dashed var(--brd);border-radius:8px;cursor:pointer;font-size:12px;color:var(--txt2);margin-bottom:6px">
+              📂 Klik untuk upload gambar QRIS
+            </label>
+            <div id="qris-preview-wrap" style="display:none;text-align:center;margin-bottom:8px">
+              <img id="qris-preview-img" style="max-width:200px;border-radius:8px;border:1px solid var(--brd)">
+              <div style="margin-top:4px"><button onclick="hapusQRIS()" style="font-size:11px;padding:3px 10px;background:var(--red-bg,#FEE2E2);color:var(--red-dk,#B91C1C);border:1px solid #FCA5A5;border-radius:6px;cursor:pointer">Hapus</button></div>
+            </div>
+            <div id="qris-saved-wrap" style="display:none;text-align:center;margin-bottom:8px">
+              <img id="qris-saved-img" style="max-width:200px;border-radius:8px;border:1px solid var(--brd)">
+              <div style="font-size:10px;color:var(--txt3);margin-top:4px">QRIS tersimpan</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">📛 Nama QRIS / Merchant</label>
+            <input class="fi" id="cfg-qris-nama" placeholder="WarungKu / Nama Merchant">
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="simpanInfoPembayaran()">💾 Simpan Info Pembayaran</button>
+        </div>
+
         <div class="card">
           <div class="card-hd"><span class="card-title">🔐 Password Admin</span></div>
           <div style="font-size:12px;color:var(--txt2);margin-bottom:12px">Ubah password login super admin.</div>
@@ -514,6 +555,21 @@ async function savePengaturanAdmin(){
   POS_BASE_URL = url || POS_BASE_URL;
   saveAdminCFG();
   updatePreviewLink();
+  // Load info pembayaran
+  var nbEl = document.getElementById('cfg-nama-bank');
+  var rkEl = document.getElementById('cfg-rekening');
+  var anEl = document.getElementById('cfg-atas-nama');
+  var qnEl = document.getElementById('cfg-qris-nama');
+  if (nbEl) nbEl.value = _adminCFG.namaBank || '';
+  if (rkEl) rkEl.value = _adminCFG.rekening || '';
+  if (anEl) anEl.value = _adminCFG.atasNama || '';
+  if (qnEl) qnEl.value = _adminCFG.qrisNama || '';
+  if (_adminCFG.qrisImg) {
+    var savedImg  = document.getElementById('qris-saved-img');
+    var savedWrap = document.getElementById('qris-saved-wrap');
+    if (savedImg)  savedImg.src = _adminCFG.qrisImg;
+    if (savedWrap) savedWrap.style.display = 'block';
+  }
   // Sync to Supabase system_config
   if (_sb) {
     var configs = [];
@@ -572,6 +628,69 @@ function nav(p){
   if(p==='dashboard')renderDashboard();
   if(p==='pengaturan')renderPengaturanPage();
 }
+function previewQRIS(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  if (file.size > 2*1024*1024) { showNotif('Ukuran QRIS maks 2MB','#EF4444'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = document.getElementById('qris-preview-img');
+    var wrap = document.getElementById('qris-preview-wrap');
+    if (img) img.src = e.target.result;
+    if (wrap) wrap.style.display = 'block';
+    var saved = document.getElementById('qris-saved-wrap');
+    if (saved) saved.style.display = 'none';
+    _adminCFG._qrisNewData = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function hapusQRIS() {
+  _adminCFG._qrisNewData = null;
+  _adminCFG.qrisImg = null;
+  var wrap = document.getElementById('qris-preview-wrap');
+  var saved = document.getElementById('qris-saved-wrap');
+  var inp = document.getElementById('cfg-qris-file');
+  if (wrap) wrap.style.display = 'none';
+  if (saved) saved.style.display = 'none';
+  if (inp) inp.value = '';
+}
+
+async function simpanInfoPembayaran() {
+  var namaBank  = (document.getElementById('cfg-nama-bank')||{value:''}).value.trim();
+  var rekening  = (document.getElementById('cfg-rekening')||{value:''}).value.trim();
+  var atasNama  = (document.getElementById('cfg-atas-nama')||{value:''}).value.trim();
+  var qrisNama  = (document.getElementById('cfg-qris-nama')||{value:''}).value.trim();
+  var qrisImg   = _adminCFG._qrisNewData || _adminCFG.qrisImg || null;
+
+  _adminCFG.namaBank  = namaBank;
+  _adminCFG.rekening  = rekening;
+  _adminCFG.atasNama  = atasNama;
+  _adminCFG.qrisNama  = qrisNama;
+  _adminCFG.qrisImg   = qrisImg;
+  saveAdminCFG();
+
+  if (_sb) {
+    try {
+      var configs = [
+        {key:'nama_bank',  value: namaBank},
+        {key:'rekening',   value: rekening},
+        {key:'atas_nama',  value: atasNama},
+        {key:'qris_nama',  value: qrisNama},
+        {key:'qris_img',   value: qrisImg||''},
+      ];
+      for (var i = 0; i < configs.length; i++) {
+        await _sb.from('system_config').upsert(configs[i], {onConflict:'key'});
+      }
+      showNotif('✅ Info pembayaran tersimpan & tersync','#00B894');
+    } catch(e) {
+      showNotif('✅ Tersimpan lokal (sync gagal: '+e.message+')','#F59E0B');
+    }
+  } else {
+    showNotif('✅ Info pembayaran disimpan','#00B894');
+  }
+}
+
 function renderPengaturanPage(){
   var urlEl = g("cfg-pos-base-url");
   if(urlEl) urlEl.value = _adminCFG.posBaseUrl || POS_BASE_URL;
@@ -619,8 +738,10 @@ function renderDashboard(){
   var now=new Date();var in7=new Date(now);in7.setDate(in7.getDate()+7);
   var aktif=_subData.filter(function(s){return s.status==='active'||s.status==='trial';});
   var expired=_subData.filter(function(s){return s.status==='expired'||(s.selesai&&new Date(s.selesai)<now);});
+  var pending=_subData.filter(function(s){return s.status==='pending';});
   g('m-toko').textContent=_tokoData.length;
   g('m-aktif').textContent=aktif.length;
+  var pendingEl=g('m-pending'); if(pendingEl) pendingEl.textContent=pending.length;
   g('m-expired').textContent=expired.length;
   var soon=_subData.filter(function(s){
     if(!s.selesai)return false;var d=new Date(s.selesai);return d>=now&&d<=in7&&s.status!=='expired';
