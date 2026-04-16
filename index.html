@@ -545,8 +545,8 @@ function saveAdminCFG(){
 async function savePengaturanAdmin(){
   var url = (g("cfg-pos-base-url")||{value:""}).value.trim();
   if(url && !url.endsWith("/")) url += "/";
-  var orderUrl = (g("cfg-order-url")||{value:""}).value.trim().replace(/\/+$/,"");
-  var recruitUrl = (g("cfg-recruit-url")||{value:""}).value.trim().replace(/\/+$/,"");
+  var orderUrl = (g("cfg-order-url")||{value:""}).value.trim();
+  var recruitUrl = (g("cfg-recruit-url")||{value:""}).value.trim();
   var wa = (g("cfg-admin-wa")||{value:""}).value.trim().replace(/[^0-9]/g,"");
   _adminCFG.posBaseUrl = url;
   _adminCFG.orderUrl = orderUrl;
